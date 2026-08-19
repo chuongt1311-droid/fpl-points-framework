@@ -1,0 +1,76 @@
+# FPL Points-Maximization Framework — configuration
+# Change values here, not in code. See docs/FPL_EXECUTION_PLAN.md for the
+# rationale behind every number in this file.
+
+season: "2025-26"
+
+squad_rules:
+  budget_tenths: 1000        # £100.0m, in FPL's tenths-of-a-million units
+  total: 15
+  gk: 2
+  def: 5
+  mid: 5
+  fwd: 3
+  max_per_club: 3
+  starting_xi:
+    total: 11
+    gk: 1
+    min_def: 3
+    min_mid: 2
+    min_fwd: 1
+
+horizon:
+  gameweeks: 5
+  decay_weights: [1.0, 0.85, 0.7, 0.55, 0.4]   # GW+1 ... GW+5, per plan §4.3
+
+defcon:
+  def_threshold_cbit: 10       # CBIT threshold for defenders
+  mid_fwd_threshold_cbirt: 12  # CBIRT threshold for MID/FWD
+  points: 2                    # binary, capped at 2 — see plan §4.2
+  # 2025/26 is the only season with DEFCON scoring in FPL — do not
+  # backfill DEFCON baselines from earlier seasons.
+  baseline_season_only: "2025-26"
+
+new_signing:
+  min_appearances: 3           # below this -> INSUFFICIENT_DATA / low confidence
+
+transfers:
+  free_per_gw: 1
+  max_bank: 5
+  hit_cost: 4
+  buffer: 1.5                  # re-tune after backtest RMSE is known (Phase 3)
+
+chips:
+  triple_captain_percentile: 0.90
+  bench_boost_min_pts: 15
+  free_hit_delta_min_pts: 20
+
+position_multipliers:
+  goals:
+    GK: 10
+    DEF: 6
+    MID: 5
+    FWD: 4
+  assists_flat: 3
+  clean_sheet_value:
+    GK: 4
+    DEF: 4
+    MID: 1
+    FWD: 0
+
+data:
+  history_seasons: 3
+  element_summary_shortlist_size: 150   # never loop all ~700 players — plan §3.1
+  rate_limit_seconds: 1.0
+  stale_data_warning_days: 4
+
+api:
+  base_url: "https://fantasy.premierleague.com/api"
+  # No auth required. Identify the client generically — do not put personal
+  # contact details in headers sent to a third-party service.
+  user_agent: "fpl-points-framework/1.0 (personal analytics project)"
+
+history:
+  repo_raw_base: "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data"
+  # Last 3 completed seasons, used for per-90 baselines and backtesting.
+  seasons: ["2022-23", "2023-24", "2024-25"]
