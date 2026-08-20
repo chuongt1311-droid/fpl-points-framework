@@ -281,9 +281,10 @@ docs/PROJECT_LOG.md             this file — backward-looking record
 ```
 
 **Not built yet:** `fpl/decide/transfers.py`, `fpl/decide/chips.py`,
-`.github/workflows/weekly.yml`, `fpl/evaluate/evaluate.py` (the ongoing
-per-GW health-tracker distinct from the one-off `backtest.py`). These are
-Phase 5+ scope per plan §9 — nothing about them blocked the GW1 deadline.
+`fpl/evaluate/evaluate.py` (the ongoing per-GW health-tracker distinct from
+the one-off `backtest.py`). `.github/workflows/weekly.yml` — see §9 — is
+now built. These are Phase 5+ / `FPL_V2_DESIGN.md` scope — nothing about
+them blocked the GW1 deadline.
 
 ## 6. Environment note
 
@@ -340,10 +341,52 @@ tests, synthetic bootstrap fixture, no network) covers the exit-gate
 requirements: differing `hours_to_deadline` across runs, no overwrite, no
 duplicate row on a retried `run_id`.
 
-**Not done this session** (flagged in `docs/HANDOFF.md` §9, deliberately
-out of scope for a single sitting): rotating the leaked Bzzoiro token
-(requires the token-issuing service, not something doable from the repo),
-`.github/workflows/weekly.yml` automation, and the rest of
-`FPL_V2_DESIGN.md` (measurement layer, statistical core, learned
-availability) — all substantially larger and, in the last case, blocked on
+Merged `v2/hotfix-and-snapshot` into `main` (fast-forward, `acf0be1`).
+
+## 9. Dashboard fix + weekly automation + push (2026-08-20, same session)
+
+Two bugs surfaced while building on top of the hotfix, both fixed
+immediately rather than left for later since they were caused by work
+already done this session:
+
+1. `dashboard/template.html`'s This Week KPI tile still read
+   `sq.expected_points`, a field the hotfix renamed away —
+   `next_gw_expected_points` is undefined-safe now, and the tile's
+   sub-label (which described the old, buggy semantics) was corrected too.
+   `scripts/build_dashboard_data.py`'s `known_limitations` list also still
+   claimed the conceded_pts bug was unfixed; removed, replaced with the
+   still-open shrinkage gap. Regenerated `dashboard/data.json` +
+   `index.html`; verified in-browser (local static server), no console
+   errors, KPI tile reads 66.5. Commit `f8ed96e`.
+2. `fpl/collect/snapshot.py`'s `__main__` was calling `get_bootstrap_static()`
+   a second time, independent of whatever `fpl.collect.fpl_client`'s own
+   run in the same job just pulled — wasteful, and risked a different
+   bootstrap snapshot than the rest of that pipeline run used. Fixed to
+   read the cached `data/raw/bootstrap_static.json`, same pattern as
+   `build_players._load_bootstrap()`. The re-run this produced added a
+   second real row to `availability_2026-27.csv` (1198 rows, 2 run_ids,
+   `hours_to_deadline` 25.67 -> 25.53) — the snapshot's exit gate (spec
+   §2.4: two runs, differing `hours_to_deadline`, nothing overwritten) is
+   now genuinely satisfied by real data, not just by
+   `tests/test_snapshot.py`'s synthetic fixture. Commit `32b6c54`.
+
+Built `.github/workflows/weekly.yml` (`FPL_V2_DESIGN.md` spec §2.0) —
+4 scheduled touchpoints (Tue/Fri/Sat-AM/Sat-PM UTC per the spec's table)
+plus manual dispatch, running collect -> snapshot -> transform -> decide ->
+dashboard-data and committing regenerated artefacts back to `main` under a
+`fpl-pipeline-bot` identity. Deliberately excludes `fpl.evaluate.backtest`
+(Phase 3 one-off retrospective, not the ongoing per-GW `evaluate.py` the
+plan describes, which isn't built). YAML validated locally; **not yet
+verified against a live scheduled run** — that only happens once Actions
+picks it up on GitHub. Commit `46038cc`.
+
+Pushed `main` to `origin` (`e5fa065..46038cc`, 5 commits) — the repo the
+`weekly.yml` schedule depends on now has the workflow file live.
+
+**Not done this session** (deliberately out of scope for a single
+sitting, flagged in `docs/HANDOFF.md` §9): rotating the leaked Bzzoiro
+token (requires the token-issuing service, not something doable from the
+repo — do this first, independent of everything else here), and the rest
+of `FPL_V2_DESIGN.md` (measurement layer, statistical core, learned
+availability) — substantially larger, and in the last case blocked on
 10-12 gameweeks of calendar time regardless of effort spent now.
