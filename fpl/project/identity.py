@@ -82,19 +82,27 @@ def attach_current_player_id(gw_df: pd.DataFrame, season: str, current_players: 
     return bridge
 
 
-def attach_current_team_id(df: pd.DataFrame, season: str, team_col: str = "team") -> pd.DataFrame:
+def attach_current_team_id(
+    df: pd.DataFrame, season: str, team_col: str = "team", reference_teams: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
     """
     Join a season's team-indexed data (fixtures.csv uses that season's team
-    id in `team_col`) onto the CURRENT season's team `id`, via `code`. Rows
-    for teams with no current-season match (relegated out of the league)
+    id in `team_col`) onto a reference season's team `id`, via `code`. Rows
+    for teams with no match in the reference (relegated out of the league)
     are dropped — by construction, this also correctly excludes newly
     promoted teams from historical-season joins for seasons before they
     were in the top flight, since they simply never appear in older
     teams.csv files in the first place.
+
+    reference_teams: id/code/name DataFrame to bridge onto — defaults to the
+    live current season (current_team_code_map()). fpl/evaluate/backtest.py
+    passes a historical season's own teams.csv here instead, to build a
+    leak-free "as if this were the current season" bridge for backtesting.
     """
     teams_raw = _teams_raw(season)
     if teams_raw is None:
         raise FileNotFoundError(f"teams.csv missing for {season} in {HIST_DIR}")
+    reference_teams = reference_teams if reference_teams is not None else current_team_code_map()
 
     # teams_raw's own `code`/`name` columns could collide with columns
     # already on `df` (e.g. fixtures.csv has its own unrelated `code` for
@@ -103,10 +111,10 @@ def attach_current_team_id(df: pd.DataFrame, season: str, team_col: str = "team"
     teams_bridge = teams_raw.rename(columns={"id": team_col, "code": "_team_code", "name": "_team_name"})
     bridge = df.merge(teams_bridge, on=team_col, how="inner")
 
-    cur_map = current_team_code_map().rename(
+    ref_map = reference_teams.rename(
         columns={"id": "current_team_id", "code": "_team_code", "name": "current_team_name"}
     )
-    bridge = bridge.merge(cur_map, on="_team_code", how="inner")
+    bridge = bridge.merge(ref_map[["current_team_id", "_team_code", "current_team_name"]], on="_team_code", how="inner")
     bridge = bridge.drop(columns=["_team_code", "_team_name"])
     return bridge
 

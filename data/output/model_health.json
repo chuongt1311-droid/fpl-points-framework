@@ -1,0 +1,46 @@
+{
+  "test_season": "2025-26",
+  "train_seasons": [
+    "2023-24",
+    "2024-25"
+  ],
+  "n_players_tested": 537,
+  "scope_note": "Single retrospective split, actual minutes used, no fixture adjustment, DEFCON excluded (no leak-free training season exists) \u2014 see module docstring.",
+  "rmse_by_position": {
+    "DEF": {
+      "n_players": 183.0,
+      "rmse": 23.038668604110384,
+      "mae": 15.336279297172563,
+      "mean_actual": 65.78142076502732,
+      "mean_predicted": 58.320886388840144
+    },
+    "FWD": {
+      "n_players": 66.0,
+      "rmse": 30.682393831220352,
+      "mae": 20.039650596226373,
+      "mean_actual": 64.12121212121212,
+      "mean_predicted": 54.04272960156764
+    },
+    "GK": {
+      "n_players": 40.0,
+      "rmse": 20.369208453756666,
+      "mae": 12.551841058599257,
+      "mean_actual": 64.1,
+      "mean_predicted": 55.36041003884983
+    },
+    "MID": {
+      "n_players": 248.0,
+      "rmse": 26.280153935711674,
+      "mae": 17.421258443125936,
+      "mean_actual": 62.80241935483871,
+      "mean_predicted": 55.576468163388675
+    }
+  },
+  "overall_rmse": 25.425332131740213,
+  "rank_correlation_by_position": {
+    "DEF": 0.928,
+    "FWD": 0.902,
+    "GK": 0.934,
+    "MID": 0.91
+  }
+}
