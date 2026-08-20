@@ -33,6 +33,10 @@ defcon:
 
 new_signing:
   min_appearances: 3           # below this -> INSUFFICIENT_DATA / low confidence
+  # A player can also fail confidence with SOME history if it's too little
+  # to trust (e.g. 1 substitute minute last season) — same 450-min floor
+  # used as the qualification threshold in Phase 2's profile research.
+  min_historical_minutes: 450
 
 transfers:
   free_per_gw: 1
@@ -78,3 +82,9 @@ history:
   # the archive: 2025-26/gws/merged_gw.csv has defensive_contribution and
   # clearances_blocks_interceptions columns; 2026-27 doesn't exist yet (404).
   seasons: ["2023-24", "2024-25", "2025-26"]
+  # weight = recency_decay ** (seasons_ago), most recent season = 0 seasons ago.
+  # With 3 seasons: oldest=0.36, middle=0.6, most recent=1.0.
+  recency_decay: 0.6
+  # position+price-tier prior fallback for new signings (plan §3.3): price
+  # tier bucket width in £m.
+  price_tier_width: 1.0

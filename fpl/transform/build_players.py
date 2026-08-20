@@ -94,10 +94,25 @@ def build_players(bootstrap: Optional[dict] = None) -> pd.DataFrame:
     # v1 new-signing rule input (plan §3.3): appearance count this season.
     # `starts` is the accurate proxy where the API exposes it; otherwise fall
     # back to a minutes-based estimate.
-    if "starts" in df.columns:
+    #
+    # VERIFIED QUIRK: bootstrap-static's per-element season-cumulative fields
+    # (starts/minutes/goals_scored/...) do NOT reset to 0 as soon as a new
+    # season's `events` list appears — they carry over the previous season's
+    # final totals until real matches start. Confirmed directly: pulled
+    # pre-GW1 with events[0] (Gameweek 1) showing finished=False, is_next=True
+    # (deadline still in the future), yet some players already showed
+    # starts=3+/minutes>0. Trusting that field here would silently promote
+    # players to confidence='high' off a stale prior season, not real
+    # current-season form. So: only trust these fields once at least one
+    # event has actually finished — until then, force 0. Self-corrects
+    # automatically as the season progresses and events start finishing.
+    season_has_started = any(e.get("finished") for e in bootstrap.get("events", []))
+    if season_has_started and "starts" in df.columns:
         df["appearances_this_season"] = df["starts"].fillna(0).astype(int)
-    else:
+    elif season_has_started:
         df["appearances_this_season"] = (df["minutes"].fillna(0) // 90).astype(int)
+    else:
+        df["appearances_this_season"] = 0
     df["new_signing_flag"] = df["appearances_this_season"] < 3
 
     df = df.drop(columns=["first_name", "second_name", "element_type", "now_cost"])
