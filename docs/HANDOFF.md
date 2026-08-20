@@ -1,27 +1,29 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-20 (updated, post-hotfix):** Phases 0–4(1/N) done —
-data layer, research, projection model + optimiser + backtest, and a
-static dashboard, pushed through commit `e5fa065`. GW1 deadline is
-**2026-08-21 17:30 UTC**, ~26h away as of this update.
+**Status as of 2026-08-20 (updated, post-hotfix + v2 spec §2/§3/§4):**
+Phases 0–4(1/N) done, and most of `docs/FPL_V2_DESIGN.md` ("FPL Framework
+v2") landed the same day — see §4a/§4b below for the full breakdown. GW1
+deadline is **2026-08-21 17:30 UTC**.
 
-The GW1 hotfix (`gw1-hotfix.patch` — conceded_pts direction fix + XI/captain
-split into their own per-gameweek solve; see §4a below) has now been
-**applied and verified** on branch `v2/hotfix-and-snapshot`:
+The GW1 hotfix (conceded_pts direction fix + XI/captain split into their
+own per-gameweek solve) is applied and verified:
 [`data/output/gw1_recommendations.json`](../data/output/gw1_recommendations.json)
-is regenerated and its `next_gw_expected_points` (66.46) is the number to
-actually trust for GW1 — the old single `expected_points` field (235.22)
-was silently the 5-GW weighted sum, not a one-week forecast. Captain
-**Haaland**, vice-captain **Cunha** (moved from Palmer by the fix).
-`tests/test_hotfix_regressions.py` (5 tests) and `tests/test_snapshot.py`
-(6 tests) both pass — see §4a.
+is regenerated, captain **Haaland**, vice-captain **Cunha**.
+`next_gw_expected_points` (the one-week number, now separate from the
+5-GW `horizon_weighted_xpts`) reflects everything below — the hotfix,
+shrinkage, and calibration all feed the same live projection.
 
-A design spec for the next round of work — `docs/FPL_V2_DESIGN.md`
-("FPL Framework v2") — has been written and approved but is only partially
-implemented (see §4a: the hotfix and the first availability snapshot row
-are done; the rest — measurement layer, statistical core, learned
-availability — is still ahead). It supersedes nothing here; it extends
-this file's punch list with a concrete build order.
+**v2 spec progress:** §2 (availability snapshot) and §2.0 (weekly
+automation) done; §3 (measurement layer — actuals collector, squad state,
+hindsight/regret engine, backtest repair, dashboard tab) done, built and
+tested against synthetic data since no gameweek has finished yet to
+generate real actuals; §4.1/§4.2/§4.4 (shrinkage, calibration, bench
+weight) done and tuned against real backtest data; §4.3 (multiplier
+collapse warning) was already done in the hotfix. **§5 (learned
+availability) is explicitly NOT started** — it needs 10-12 gameweeks of
+snapshot history to avoid fitting a model on almost nothing, and there are
+currently 2 snapshot rows. Not a scoping choice that more effort fixes;
+a calendar-time blocker.
 
 This file is for whoever (human or Claude) picks this up next — it captures
 what isn't obvious from reading the code cold: why things are built the way
@@ -42,24 +44,28 @@ fpl/project/fixtures.py         3 FDR multipliers (attack/defence/defcon)
 fpl/project/minutes.py          availability gate, minutes_factor(p)
 fpl/project/defcon.py           DEFCON threshold-crossing rate
 fpl/project/project.py          assembles xPts(p,g) for GW+1..GW+5
-fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage per gw1-hotfix.patch
-fpl/evaluate/backtest.py        RMSE/rank-corr backtest vs 2025-26 actuals
-fpl/collect/snapshot.py         availability snapshot writer — spec §2, new this update
+fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage, bench weight (spec §4.4)
+fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
+fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
+fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)
+fpl/collect/snapshot.py         availability snapshot writer — spec §2
+fpl/collect/actuals.py          per-GW actuals collector — spec §3.1, untested-live (no GW finished)
 scripts/build_dashboard_data.py dashboard data-prep (reads pipeline outputs, never recomputes model)
-dashboard/                      static, self-contained HTML dashboard — Phase 4 (1/N)
+dashboard/                      static, self-contained HTML dashboard — Phase 4 (1/N) + Week in Review tab (spec §3.6)
 tests/verify_phase1.py          Phase 1 exit-gate check
-tests/test_hotfix_regressions.py  hotfix regressions — first pytest suite in the repo
-tests/test_snapshot.py          snapshot.py regressions
+tests/test_*.py                 44 pytest tests total — hotfix, snapshot, actuals, squad_state, hindsight,
+                                 shrinkage, calibration, bench_weight, backtest_calibration (see tests/)
 notebooks/01_profile_research.ipynb   Phase 2 exit-gate deliverable, executed with real outputs baked in
 config.yaml                     every tunable constant — read this before touching any module
-docs/FPL_V2_DESIGN.md           the next round of work — measurement layer, statistical core, learned availability
+docs/FPL_V2_DESIGN.md           the v2 spec this session mostly implemented — see §4b below
+.github/workflows/weekly.yml    scheduled automation — spec §2.0, built, not yet verified against a live run
 ```
 
 Not built yet: `fpl/decide/transfers.py`, `fpl/decide/chips.py`,
-`.github/workflows/weekly.yml`. `fpl/evaluate/backtest.py` exists (Phase
-3's one-off exit-gate deliverable) but has three known-faulty behaviours
-(see §5 items 7–9) that spec §3.5 fixes; the plan's `evaluate.py` (ongoing
-per-GW health-tracking) still doesn't exist.
+`fpl/evaluate/evaluate.py` (ongoing per-GW health-tracking, distinct from
+the one-off `backtest.py`), and spec §5 (learned availability — see the
+top of this file for why). `fpl/evaluate/backtest.py`'s three
+previously-faulty behaviours (finding 7/8/9) are now fixed — see §4b.
 
 **Environment gotcha:** this machine's default `python` resolves to an
 MSYS2/ucrt64 build with no prebuilt wheels for pandas/numpy (pip tries to
@@ -180,6 +186,74 @@ not be silent per spec §4.3).
 Both regressions are guarded by `tests/test_hotfix_regressions.py`
 (verified to fail against the pre-fix code before this was applied).
 
+## 4b. v2 spec build (2026-08-20, same day, on `main`)
+
+`docs/FPL_V2_DESIGN.md` sub-projects, in the order the spec itself
+requires (measurement before statistical changes — you can't tune what
+you can't measure):
+
+**§2 Availability snapshot + §2.0 automation** — `fpl/collect/snapshot.py`,
+`.github/workflows/weekly.yml`. 2 real rows captured so far
+(`data/snapshots/availability_2026-27.csv`). The workflow hasn't had its
+first live scheduled run yet — only validated locally.
+
+**§3 Measurement layer** — `fpl/collect/actuals.py` (gated on
+`finished AND data_checked`), `fpl/decide/squad_state.py`
+(`data/state/squad_gw{n}.json`, wired into `build_gw1_squad`),
+`fpl/evaluate/hindsight.py` (three XIs — chosen/best-from-15/best-global —
+regret decomposed into captaincy/bench/squad), `fpl/evaluate/backtest.py`
+repair (findings 7/8/9, see §5 below), a Week in Review dashboard tab.
+**None of this has run against real data yet** — GW1 hasn't finished. Every
+piece is unit-tested against synthetic data instead (spec §7.3's own bar
+makes that possible: no network, no committed artefacts). Run
+`python -m fpl.collect.actuals 1` once GW1 is finished+data_checked, then
+`python -m fpl.evaluate.hindsight 1` — that's the first real exercise of
+this whole layer, and it's exactly the kind of thing this project's own
+culture says to re-verify by running against real data before trusting.
+
+**§4 Statistical core**:
+- **§4.1 Shrinkage** replaces the binary confidence cliff outright.
+  `fpl/project/baseline.py`'s `shrink_rate`/`shrinkage_weight` are shared
+  by `defcon.py` (separate `k_defcon`, matches-based — not backtestable,
+  2025-26 is the only DEFCON season) and `backtest.py` (so RMSE reflects
+  exactly what shrinkage does). `k=1500`, tuned against the repaired
+  backtest — swept k from 50 to 50000; RMSE and rank correlation both kept
+  improving all the way to k~20000, which would leave even Haaland
+  minority-personal, directly contradicting the spec's own stated
+  expectation ("Haaland-class large-sample players barely move") — so
+  minimising backtest loss alone was the wrong criterion, and k=1500 was
+  chosen instead as the point where most of the real gain is already
+  banked (RMSE 21.82->20.97 vs the naive k=450 default) while a genuinely
+  nailed player stays majority-personal. **Verified against real players**:
+  Haaland w=0.79 (and is literally his own price tier at £15.5m — no FWD
+  peer exists that high, so his "prior" equals his own rate by
+  construction — a real edge case, not a bug); Osula w=0.44,
+  `goals_scored_per90` 0.590->0.491, now below the FWD top-decile
+  threshold — **the Osula test passes**, confirmed by hand (a mechanical
+  per-channel-quantile scan produces false positives for degenerate
+  distributions like GK goal rate, so this was checked by inspection
+  instead — see `docs/PROJECT_LOG.md` for the full table).
+- **§4.2 Calibration** — `backtest.py` now exposes per-(position,channel)
+  `calibration_factors` in `model_health.json`; `project.py`'s
+  `apply_calibration` applies them as an explicit final step (every raw
+  `*_pts` column stays alongside its `*_pts_cal` counterpart — decision
+  D11). Excludes `defcon_pts` (no leak-free backtest season), `card_pts`
+  and `appearance_pts` (noisy or deterministic, not something a rate
+  predicts).
+- **§4.3 Multiplier collapse warning** — already done, in the hotfix.
+- **§4.4 Bench weight** — `optimiser.py`'s stage-1 objective now adds
+  `config.optimiser.bench_weight_epsilon` (0.02) × every squad member's
+  xpts, breaking ties among equally-priced bench candidates without
+  touching stage 2's separate XI/captain solve. Not yet tuned against real
+  bench regret (spec's own instruction) — no gameweek has finished.
+
+**§5 Learned availability — not started, deliberately.** Needs 10-12
+gameweeks of (pre-GW belief -> actual minutes) pairs; there are 2 snapshot
+rows right now. Attempting it now would fit a model on almost nothing,
+dominated by the healthy-and-nailed majority that needs no help — exactly
+what spec §5 itself warns against. This is a calendar-time blocker, not an
+effort one.
+
 ## 5. Known gaps — verified via a full code review (2026-08-20, /code-review high)
 
 A structured 7-angle review (correctness, removed-behavior, cross-file,
@@ -192,24 +266,23 @@ next. Full detail in each finding's failure scenario (surfaced via
 
 1. ~~`fpl/project/project.py:136` — `conceded_pts` uses the WRONG-DIRECTION
    fixture multiplier.~~ **FIXED 2026-08-20** — see §4a above.
-2. **`fpl/project/baseline.py:188` — confidence gate's `&` lets a
-   thin-history player escape the new-signing fallback** once
-   `appearances_this_season >= 3`, even with NaN per-90 rates (which
-   silently become 0 by the time they reach `weighted_xpts`, via
-   `groupby().sum()`'s default `skipna=True` — not a crash, just an
-   invisible "this player is worth 0 points"). Currently dormant (pre-season
-   appearances are forced to 0 by a different, already-fixed bug) but will
-   activate the moment any rookie gets 3 real 2026-27 appearances.
+2. ~~`fpl/project/baseline.py:188` — confidence gate's `&` lets a
+   thin-history player escape the new-signing fallback.~~ **DISSOLVED
+   2026-08-20** by spec §4.1's shrinkage (see §4b below) — the binary gate
+   this bug lived in doesn't exist any more, so there's no boundary left
+   for a thin-history player to escape through.
 3. **`fpl/project/minutes.py:140` — GK backup override never re-promotes
    the backup when the price-designated #1 gets injured.** `status`-driven
    zeroing runs first and correctly zeroes an injured #1's own factor, but
    `apply_gk_backup_override` picks "#1" from a static price ranking with
-   no re-check — the actual new starter stays clipped at 0.02.
-4. **`fpl/project/project.py:79` — DEFCON's confidence flag (`defcon_source`)
-   is dropped before reaching the optimiser.** A player can be
-   `confidence='high'` overall while their DEFCON rate specifically is a
-   tier-prior guess (<10 DEFCON-season matches) — the plan §3.3 "don't
-   confidently recommend a low-data player" rule doesn't cover this channel.
+   no re-check — the actual new starter stays clipped at 0.02. **Still
+   open** — spec §5.4 names this as its fallback fix if the (not-yet-built)
+   learned availability model's gate fails; until then it needs an
+   explicit re-rank-after-zeroing fix.
+4. ~~`fpl/project/project.py:79` — DEFCON's confidence flag (`defcon_source`)
+   is dropped before reaching the optimiser.~~ **DISSOLVED 2026-08-20** —
+   spec §4.1's shrinkage applies to `defcon_rate` too (see §4b), so
+   confidence is baked into the rate itself now, nothing separate to drop.
 5. **`fpl/project/fixtures.py:80` — `fixtures.parquet` has no auto-build
    path.** Unlike every other input (`build_players`/`baseline`/`defcon`/
    `minutes`, all self-building from raw files), `load_fixture_table()`
@@ -222,20 +295,20 @@ next. Full detail in each finding's failure scenario (surfaced via
    gracefully per its docstring, but `minutes.py`'s hard `[[...]]` select
    would `KeyError` instead — the contract is honored on the write side
    only.
-7. **`fpl/evaluate/backtest.py:148` — zero-fills missing training rates**
-   instead of the position/price-tier prior the live model uses for
-   exactly this population (cold-start players) — undocumented, and it
-   means the backtest never actually exercises the new-signing fallback
-   path it should validate.
-8. **`fpl/evaluate/backtest.py:47` — omits `save_pts`/`conceded_pts`
-   entirely for GK/DEF**, unlike the live model. Undocumented; plausibly
-   contributes to GK showing the second-worst under-prediction ratio
-   (86.4%) in the actual backtest output.
-9. **`fpl/evaluate/backtest.py:90` — the core recency-weighted per-90 rate
-   formula is duplicated from `baseline.py`'s `compute_player_rates()`**
-   almost line-for-line (plus a second `_season_weight()`). A future fix to
-   the live formula won't propagate here — the backtest would silently stop
-   validating what production actually does.
+7. ~~`fpl/evaluate/backtest.py:148` — zero-fills missing training rates.~~
+   **FIXED 2026-08-20** — spec §3.5, see §4b below. Now shrinks toward the
+   tier prior (same mechanism as live), exercising the cold-start path on
+   210/537 test players instead of predicting a bare 0 for them.
+8. ~~`fpl/evaluate/backtest.py:47` — omits `save_pts`/`conceded_pts`
+   entirely for GK/DEF.~~ **FIXED 2026-08-20** — spec §3.5. GK's
+   mean_predicted moved from 55.36 (well under the actual 64.10) to 65.57
+   (essentially matched), confirming this was indeed the main driver of
+   GK's under-prediction, as this finding predicted.
+9. ~~`fpl/evaluate/backtest.py:90` — the core recency-weighted per-90 rate
+   formula is duplicated from `baseline.py`.~~ **FIXED 2026-08-20** — spec
+   §3.5. Now imports `load_weighted_player_history`/`compute_player_rates`
+   from `baseline.py` directly (restricted to the two training seasons via
+   a config override), so a future formula fix propagates automatically.
 10. **Unavailable-status set `["i","s","u"]` hardcoded identically in
     `minutes.py:107`, `project.py:119`, `optimiser.py:60`** — no shared
     constant. (Checked against real bootstrap-static data: no additional
@@ -260,14 +333,16 @@ exclusion) is inlined rather than a reusable `eligible_player_pool()` that
   `top5gk_check.csv`) got swept into commits by `git add -A` during
   investigation — removed and `.claude/` (agent worktree scratch space)
   added to `.gitignore`.
-- **Backtest RMSE (Phase 3) has real, documented scope limits** beyond the
-  two gaps above: single retrospective split (not full walk-forward), no
-  fixture adjustment, and DEFCON entirely excluded (2025-26 is the only
+- **Backtest RMSE has real, documented scope limits that are UNCHANGED by
+  the §3.5 repair or §4.1 shrinkage** (both improved the NUMBERS, not the
+  scope): single retrospective split (not full walk-forward), no fixture
+  adjustment, and DEFCON entirely excluded (2025-26 is the only
   DEFCON-scored season, so there's no leak-free prior season to train it
-  from). RMSE 20-31 by position, systematic ~15% under-prediction — but
-  rank correlation 0.90-0.93 across every position. See
-  `fpl/evaluate/backtest.py`'s module docstring and
-  `data/output/model_health.json` for the full numbers.
+  from). Current numbers (post repair + shrinkage k=1500): overall RMSE
+  20.97 (was 25.43), rank correlation 0.947-0.967 across every position
+  (was 0.90-0.93). See `fpl/evaluate/backtest.py`'s module docstring and
+  `data/output/model_health.json` for the full breakdown, including
+  per-(position,channel) calibration factors (spec §4.2).
 - **`fpl/project/defcon.py` uses the player's CURRENT position** to decide
   the DEFCON threshold when reading historical `defensive_contribution`
   values, not their position AT THE TIME the raw stat was recorded.
@@ -312,16 +387,18 @@ what comes after Phase 4: an availability snapshot (irreversible, started
 this update — `data/snapshots/availability_2026-27.csv` has its first row),
 a measurement layer (regret decomposition replacing RMSE as the primary
 metric), then a statistical core (shrinkage, calibration), then a learned
-availability model — deliberately in that order, and the last item can't
-start for 10-12 gameweeks (needs that much snapshot history). Section refs
-written as "spec §x" in future commits point into it.
+availability model. **The first two are done as of this update** (§4b) —
+only the last item remains, and it can't start for 10-12 gameweeks
+(needs that much snapshot history). Section refs written as "spec §x"
+throughout this file and the code's comments point into it.
 
-## 9. Not yet done — do before/around GW1
+## 9. Not yet done
 
 - **Rotate the Bzzoiro API token.** It's in plaintext in a circulated
   `CHAT_HANDOFF.md` (not in this repo, but in a document that's been
   shared around) — spec §1.4. This needs to happen on the token-issuing
   service directly; nobody picking up this repo can do it from the code.
+  **Still not done — do this first, independent of everything else.**
 - ~~`.github/workflows/weekly.yml` (spec §2.0)~~ **Built.** Runs the full
   collect→snapshot→transform→decide→dashboard chain on the spec's 4 cron
   touchpoints (Tue/Fri/Sat AM/Sat PM UTC) plus manual dispatch, then commits
@@ -331,3 +408,23 @@ written as "spec §x" in future commits point into it.
   (which doesn't exist yet). **Not yet verified live** — needs this repo
   pushed to GitHub with Actions enabled before its first real scheduled
   run; only validated locally (YAML parses, each step runs standalone).
+- **Everything in §3 (actuals/squad_state/hindsight) and §4
+  (shrinkage/calibration/bench weight) is built and unit-tested but has
+  never run against real data** — no gameweek has finished. The first
+  real exercise: once GW1 finishes and `data_checked` flips,
+  `python -m fpl.collect.actuals 1` then `python -m fpl.evaluate.hindsight 1`.
+  Sanity-check the regret numbers by hand before trusting them (spec §3.7's
+  own exit gate: "a hand-checked gameweek matches manual calculation").
+- **Bench weight epsilon (0.02) and shrinkage k (1500)** are both real,
+  data-informed choices but neither is validated against LIVE regret yet
+  (only the backtest, for k). Revisit once a few gameweeks of hindsight
+  data exist.
+- **§5 (learned availability)** — blocked on calendar time, see top of
+  this file and §4b.
+- **`fpl/decide/transfers.py`, `fpl/decide/chips.py`,
+  `fpl/evaluate/evaluate.py`** — still unbuilt, spec §6 explicitly out of
+  scope for v2. `squad_state.py` was deliberately shaped to support
+  `transfers.py` when it's built.
+- **Handoff findings #3, #5, #6, #10** (GK backup re-promotion, no
+  fixtures.parquet auto-build path, minutes.py's hard column select,
+  hardcoded unavailable-status set in 3 files) remain open — see §5.

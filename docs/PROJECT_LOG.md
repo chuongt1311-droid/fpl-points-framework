@@ -383,10 +383,168 @@ picks it up on GitHub. Commit `46038cc`.
 Pushed `main` to `origin` (`e5fa065..46038cc`, 5 commits) — the repo the
 `weekly.yml` schedule depends on now has the workflow file live.
 
-**Not done this session** (deliberately out of scope for a single
-sitting, flagged in `docs/HANDOFF.md` §9): rotating the leaked Bzzoiro
-token (requires the token-issuing service, not something doable from the
-repo — do this first, independent of everything else here), and the rest
-of `FPL_V2_DESIGN.md` (measurement layer, statistical core, learned
-availability) — substantially larger, and in the last case blocked on
-10-12 gameweeks of calendar time regardless of effort spent now.
+**Not done this part of the session** (deliberately out of scope for a
+single sitting, flagged in `docs/HANDOFF.md` §9): rotating the leaked
+Bzzoiro token, and the rest of `FPL_V2_DESIGN.md`. Both continued later
+the same day — see §10.
+
+## 10. Rest of the v2 spec: measurement layer + statistical core (2026-08-20, same day, on `main`)
+
+Continuing directly from §9 above, same session. Skipped spec §5 (learned
+availability) throughout — see the reasoning at the top of `HANDOFF.md`
+and in §4b there; it's a calendar-time blocker (needs 10-12 gameweeks of
+snapshot history; there are 2 rows), not something more effort resolves.
+
+### §3.5 Backtest repair (done first — everything in §4 tunes against it)
+
+Three fixes (`e3de7be`... actually see commit history — `fpl/evaluate/backtest.py`):
+imported `compute_player_rates`/`load_weighted_player_history` from
+`baseline.py` instead of a near-duplicate (finding #9); missing training
+rates fall back to the tier prior instead of zero-filling, exercising the
+cold-start path on 210/537 test players (finding #7); added `save_pts`/
+`conceded_pts` for GK/DEF (finding #8). Real result: overall RMSE 25.43 ->
+22.73, GK specifically 55.36 -> 65.57 predicted (actual 64.10) — finding
+#8's prediction confirmed directly. Caught and fixed a real bug while
+building this: the new per-channel calibration guard compared raw sums
+against a tiny epsilon, which is always true for the negative
+`conceded_pts` channel — every DEF/GK conceded calibration was silently
+defaulting to a no-op regardless of real signal, fixed to compare
+magnitude. `tests/test_backtest_calibration.py` (4 tests) guards this.
+
+### §4.1 Shrinkage — the k sweep
+
+Implemented `shrink_rate`/`shrinkage_weight`/`confidence_label` in
+`baseline.py`, shared by `defcon.py` and `backtest.py`. Swept k against the
+repaired backtest before picking a value:
+
+| k | overall RMSE | overall rank corr |
+|---|---|---|
+| 50 | 23.13 | 0.934 |
+| 100 | 22.77 | 0.936 |
+| 200 | 22.36 | 0.938 |
+| 300 | 22.10 | 0.940 |
+| **450 (naive default)** | 21.82 | 0.942 |
+| 600 | 21.62 | 0.943 |
+| 900 | 21.34 | 0.945 |
+| 1500 | 20.97 | 0.947 |
+| 2500 | 20.64 | 0.949 |
+| 4000 | 20.38 | 0.950 |
+| 6000 | 20.21 | 0.950 |
+| 10000 | 20.07 | 0.951 (peak) |
+| 20000 | 19.98 | 0.951 (peak) |
+| 50000 | 19.94 | 0.951 (starts declining) |
+
+Both metrics keep improving all the way to k~20000 before even beginning
+to turn over. Taken at face value this says "shrink almost everyone almost
+all the way to the position/price-tier prior" — but checked against real
+players, weighted_minutes median across the pool is ~2074, 75th percentile
+~3659, and even Haaland (a top-decile-sample, 3-season-ever-present
+player) sits at 5514. At k=20000, Haaland's shrinkage weight would be
+5514/(5514+20000) = 0.216 — MINORITY personal, diluted toward the average
+expensive forward — directly contradicting spec §4.1's own stated
+expectation ("Haaland-class large-sample players barely move"). Minimising
+backtest loss alone was therefore the wrong criterion: the backtest can't
+distinguish "the model got better at predicting 2025-26 totals" from "the
+model stopped differentiating players at all and is just predicting the
+tier average everywhere," and this backtest's specific setup (per-90 rates
+trained on two OLDER seasons, applied against a totally different season's
+ACTUAL minutes) apparently rewards the latter more than expected — plausibly
+because 1-2-year-old personal rates are a genuinely noisy predictor of a
+different season, while FPL's own price already encodes fresher
+information a stale personal rate doesn't.
+
+**Chosen: k=1500** — solidly inside the range where the backtest already
+shows most of its gain (RMSE 21.82->20.97, corr 0.942->0.947 vs the naive
+k=450 default) while keeping the mechanism's own stated intent intact.
+Verified directly:
+
+- **Haaland**: weighted_minutes=5514.68, w=0.786. `goals_scored_per90`
+  unchanged at 0.814846 to 10 decimal places — not a bug: Haaland is
+  literally the only FWD in the £15-16m price tier (`£15.5m`, next
+  closest FWD nowhere near), so his "tier prior" equals his own personal
+  rate by construction (a tier average of one player is that player). A
+  real, documented edge case.
+- **Osula**: weighted_minutes=1159.48, w=0.436 (down from 0.72 at k=450).
+  `goals_scored_per90` 0.58992 (personal) -> 0.491283 (shrunk).
+  `bonus_per90` 1.055646 -> 0.802567. Both meaningfully corrected toward
+  the FWD tier prior.
+- **The Osula test** (spec §4.5 exit gate): 25th percentile of the
+  high-confidence pool's weighted_minutes = 3948.72. Osula's is 1159.48 —
+  thin-sample, confirmed. FWD top-decile `goals_scored_per90` threshold =
+  0.5092. Osula's shrunk rate (0.4913) is now BELOW it — the specific
+  failure mode this spec section targets no longer holds. A mechanical
+  per-position-quantile scan across ALL channels was tried first and
+  produced obvious false positives (GK `goals_scored_per90` is ~0 for
+  every goalkeeper, so a "top-decile" threshold there is meaningless) —
+  abandoned in favour of checking the real top-20-by-weighted_xpts list by
+  hand: 5 thin-sample players appear there (Thiago, Osula, O'Reilly,
+  Stach, Dewsbury-Hall), and only Osula ever showed the "personal rate
+  suspiciously close to a proven performer's despite a fraction of the
+  sample" pattern the test is actually about — Thiago has real volume
+  behind his rate (3382 weighted minutes, not a fluke), the other three
+  are balanced contributors, not spiking any one channel.
+
+### §4.2 Calibration
+
+`backtest.py` now writes `calibration_factors` (per position, per channel:
+goal/assist/cleansheet/bonus/save/conceded — deliberately excluding
+`defcon`, `card`, `appearance`) into `model_health.json`, computed as
+`sum(actual_channel_pts) / sum(predicted_channel_pts)`, clipped to
+0.5-2.0. `project.py`'s `apply_calibration` applies them as an explicit
+final step (decision D11) — `goal_pts` stays untouched, `goal_pts_cal` is
+what actually feeds `xpts_fixture`. Sample factors at k=1500: DEF
+goal=0.95/cleansheet=1.10/conceded=0.94 (model slightly under-penalises
+conceded goals), GK save=0.91 (slightly over-predicts saves), MID
+goal=0.85 (biggest single correction — MID goal-scoring is meaningfully
+under-predicted across the board).
+
+### §4.4 Bench weight
+
+`optimiser.py`'s stage-1 objective gained
+`+ bench_weight_epsilon * sum(squad[i] * xpts[i])`, epsilon=0.02 (not yet
+tuned against real bench regret — no gameweek has finished). Verified it
+breaks bench ties toward the higher-xpts candidate without touching stage
+2's separate XI/captain solve (`tests/test_bench_weight.py`, 3 tests).
+Also added `apply_availability_filters` to `optimise_squad` — needed by
+the hindsight engine's retrospective global-XI benchmark (grading against
+reality, not pre-GW confidence/status flags).
+
+### §3.1-3.4 Measurement layer
+
+`fpl/collect/actuals.py` (gated on `finished AND data_checked`, unlike
+`snapshot.py`'s run_id dedup this is keyed on `event` already present — a
+settled gameweek's results don't need a second row from a re-run).
+`fpl/decide/squad_state.py` (`data/state/squad_gw{n}.json`, wired into
+`build_gw1_squad` — real `squad_gw1.json` now exists). `fpl/evaluate/
+hindsight.py` — three XIs (chosen with autosubs simulated per decision D8,
+best-from-your-15, best-legal-£100m-global per decision D7 reusing
+`optimise_squad` itself) and the regret decomposition
+(captaincy/bench/squad summing to total). **None of this has run against
+real data** — GW1 hasn't finished — so it's verified with a full
+integration test on synthetic data instead
+(`tests/test_hindsight.py::test_regret_decomposition_sums_to_total`),
+proving the three components actually sum to the total on real code, not
+just by algebraic construction.
+
+### §3.6 Dashboard — Week in Review
+
+Added as a 6th tab, deliberately scoped down from the spec's full
+description (pitch graphics for both hindsight XIs, season-cumulative
+regret line) to a KPI row + regret decomposition bar chart, plus an
+honest "not yet computed" placeholder (same pattern Chip Planner already
+uses) when `data/output/hindsight_gw{n}.json` doesn't exist — which is
+always, right now. Verified both states in-browser (placeholder with the
+real, current null data; a mocked hindsight payload rendering the KPIs
+and chart correctly) — no console errors either way.
+
+### Test count
+
+44 tests total by the end of this session (`tests/`), up from 11 at the
+start of it: `test_hotfix_regressions.py` (5), `test_snapshot.py` (6),
+`test_backtest_calibration.py` (4), `test_shrinkage.py` (6),
+`test_calibration.py` (5), `test_bench_weight.py` (3), `test_actuals.py`
+(5), `test_squad_state.py` (4), `test_hindsight.py` (6). All pure unit
+tests — no network, no committed artefacts (spec §7.3) — except the two
+real-artefact-dependent hotfix regression tests, which now explicitly pin
+`calibration={}` so they stay deterministic regardless of what
+`model_health.json` currently holds on disk.
