@@ -11,7 +11,11 @@ plan §4.1:
       + save_pts(p)       × fixture_defence_mult(p, f)   [GK only]
       + bonus_pts(p)
       − card_pts(p)
-      − conceded_pts(p)   × fixture_defence_mult(p, f)
+      − conceded_pts(p)   × fixture_concede_mult(p, f)   [NOT defence_mult —
+                                                          a penalty moves the
+                                                          opposite way; see
+                                                          compute_channel_pts_
+                                                          per_fixture]
       all multiplied by: minutes_factor(p)
 
 Summing over fixtures (not a special DGW/BGW case) is why a Double
@@ -133,8 +137,18 @@ def compute_channel_pts_per_fixture(players_inputs: pd.DataFrame, fixture_mults:
     df["bonus_pts"] = df["bonus_per90"]
     df["card_pts"] = df["yellow_cards_per90"] * rules["yellow_card"] + df["red_cards_per90"] * rules["red_card"]
     # conceded penalty only applies to GK/DEF, per plan §4.2.
+    #
+    # DIRECTION (fixed 2026-08-20): this term is a PENALTY, so it must move
+    # OPPOSITE to cleansheet_pts, not with it. fixture_defence_mult is high
+    # when a clean sheet is LIKELY (weak attacking opponent) — multiplying a
+    # negative penalty by it made an easy fixture produce a BIGGER goals-
+    # conceded punishment. Every GK/DEF projection's conceded term was
+    # pointing backwards relative to fixture difficulty.
+    # Magnitude, measured on real GW1-5 data at league-average 1.38 conceded
+    # /90: up to 1.03 pts per fixture per GK/DEF at the multiplier bounds,
+    # ~0.5 at the values actually present pre-season.
     df["conceded_pts"] = (
-        -1.0 / rules["conceded_per_point"] * df["team_goals_conceded_per90"] * df["fixture_defence_mult"]
+        -1.0 / rules["conceded_per_point"] * df["team_goals_conceded_per90"] * df["fixture_concede_mult"]
     )
     df["conceded_pts"] = df["conceded_pts"].where(df["position"].isin(["GK", "DEF"]), 0.0)
 
@@ -188,11 +202,27 @@ def project_gameweeks(n_gameweeks: int = 5, config: Optional[dict] = None) -> pd
 def weighted_horizon_total(projections: pd.DataFrame, config: Optional[dict] = None) -> pd.DataFrame:
     """Collapses the (player, gameweek) table to one row per player, with a
     decay-weighted total across whichever gameweeks are present, per plan
-    §4.3's horizon weights [1.0, 0.85, 0.7, 0.55, 0.4] for GW+1...GW+5."""
+    §4.3's horizon weights [1.0, 0.85, 0.7, 0.55, 0.4] for GW+1...GW+5.
+
+    ALSO returns `next_gw_xpts` — the FIRST gameweek's xpts on its own,
+    undecayed. These two numbers answer two different questions and must not
+    be used interchangeably (see fpl/decide/optimiser.py):
+
+      weighted_xpts — "is this player worth OWNING for the next 5 GWs?"
+                      -> squad-of-15 selection, a multi-week asset decision.
+      next_gw_xpts  — "should this player START and/or be CAPTAIN this week?"
+                      -> XI and captaincy, both re-decided every single GW.
+
+    Measured on real GW1-5 projections: 100 of 595 players move more than 20
+    rank places between these two orderings, 14 move more than 50. Picking an
+    XI on the horizon number benches players who are the correct start this
+    week, and captains on a blend that describes no actual gameweek.
+    """
     config = config or load_config()
     weights = config["horizon"]["decay_weights"]
     events = sorted(projections["event"].unique())
     weight_map = {event: weights[i] for i, event in enumerate(events) if i < len(weights)}
+    next_event = events[0]
 
     df = projections.copy()
     df["weight"] = df["event"].map(weight_map)
@@ -201,8 +231,17 @@ def weighted_horizon_total(projections: pd.DataFrame, config: Optional[dict] = N
         include_groups=False,
     ).reset_index()
 
+    next_gw = (
+        df.loc[df["event"] == next_event, ["id", "xpts"]]
+        .rename(columns={"xpts": "next_gw_xpts"})
+        .drop_duplicates("id")
+    )
+
     meta = projections[["id", "web_name", "position", "team", "price", "confidence"]].drop_duplicates("id")
-    return meta.merge(weighted, on="id", how="left")
+    out = meta.merge(weighted, on="id", how="left").merge(next_gw, on="id", how="left")
+    out["next_gw_xpts"] = out["next_gw_xpts"].fillna(0.0)
+    out.attrs["next_event"] = int(next_event)
+    return out
 
 
 if __name__ == "__main__":

@@ -123,7 +123,34 @@ def compute_fixture_multipliers(
     df["fixture_attack_mult"] = attack_mult.where(opp_relevant_defence > 0, fallback)
     df["fixture_defence_mult"] = defence_mult.where(opp_relevant_attack > 0, fallback)
     df["fixture_defcon_mult"] = (1.0 / df["fixture_defence_mult"]).clip(MULT_MIN, MULT_MAX)
+    # fixture_concede_mult — HOW MANY GOALS this team is expected to ship in
+    # this fixture, relative to their own baseline. Numerically identical to
+    # fixture_defcon_mult today (both are 1/fixture_defence_mult), but kept as
+    # a SEPARATE column on purpose: "more defensive work to do" (DEFCON
+    # opportunity) and "more goals expected against us" (the conceded penalty)
+    # are distinct quantities that only happen to share an inverse right now.
+    # Coupling them to one column is how the conceded-direction bug survived
+    # review — the wrong multiplier read as plausible because its NAME didn't
+    # say what it meant. If either gets its own model in v2, the other must
+    # not silently move with it.
+    df["fixture_concede_mult"] = df["fixture_defcon_mult"]
     df["used_strength_ratings"] = (opp_relevant_defence > 0) & (opp_relevant_attack > 0)
+
+    # Guard: the three multipliers are supposed to be three INDEPENDENT
+    # signals (plan §4.2). Pre-season, strength_* is unpublished and every row
+    # falls back to FPL's single 1-5 difficulty number, which collapses
+    # attack and defence onto the same value and makes that edge inert.
+    # That's tolerable but must never be silent — it is the difference between
+    # "my fixture model" and "FPL's FDR with extra steps."
+    n_collapsed = int((df["fixture_attack_mult"].round(6) == df["fixture_defence_mult"].round(6)).sum())
+    if n_collapsed:
+        pct = 100.0 * n_collapsed / len(df)
+        print(
+            f"[fixtures] WARNING: attack and defence multipliers are identical on "
+            f"{n_collapsed}/{len(df)} rows ({pct:.0f}%) — falling back to FPL's 1-5 "
+            f"difficulty because strength_* ratings are unpublished/degenerate. "
+            f"The three-multiplier edge is INERT on those rows."
+        )
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_parquet(PROCESSED_DIR / "fixture_multipliers.parquet", index=False)

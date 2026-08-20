@@ -10,10 +10,21 @@ Constraints (real FPL rules):
   - Captain gets 2x (vice-captain = 2nd-highest xPts starter, as a fallback
     if captain doesn't play)
 
-Method: MILP via PuLP, maximising 5-GW weighted xPts of the starting XI
-plus the captain's doubled contribution — a clean MILP that solves in
-seconds, exactly matching plan §6.1's "no heuristics needed." For GW1 with
-no existing team, this produces the initial squad directly.
+Method: TWO MILP solves via PuLP, because two different questions are being
+asked and v1 answered both with the same number:
+
+  Stage 1 — the 15.  Maximise 5-GW decay-weighted xPts of an XI-shaped
+            selection, subject to budget / composition / max-3-per-club.
+            Owning a player is a multi-week commitment, so it is judged on
+            the horizon. The XI variables here exist only to shape the squad
+            (11 strong + 4 cheap bench, not 15 mediocre); their values are
+            discarded.
+  Stage 2 — the XI, the captain, the vice.  Given the 15, maximise xPts for
+            the ONE gameweek actually being played. These are re-decided
+            every week and must never be chosen on a five-fixture blend.
+
+Both solve in seconds, still "no heuristics needed" per plan §6.1. For GW1
+with no existing team, this produces the initial squad directly.
 
 plan §3.3: won't recommend a confidence='low' player unless
 config.optimiser.allow_low_confidence is set — squad selection is
@@ -53,6 +64,16 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
     config = config or load_config()
     rules = config["squad_rules"]
     allow_low_confidence = config["optimiser"]["allow_low_confidence"]
+
+    # Loud, not silent. If this column ever goes missing, the old behaviour
+    # (XI picked on the horizon number) is a plausible-looking wrong answer,
+    # not a crash — exactly the failure mode that let the bug live this long.
+    if "next_gw_xpts" not in players.columns:
+        raise KeyError(
+            "optimise_squad requires a 'next_gw_xpts' column — the XI and captain "
+            "are per-gameweek decisions and must not fall back to weighted_xpts. "
+            "Produce it via fpl.project.project.weighted_horizon_total."
+        )
 
     pool = players.copy()
     if not allow_low_confidence:
@@ -110,11 +131,18 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
         raise RuntimeError(f"Optimiser did not find an optimal solution: {pulp.LpStatus[prob.status]}")
 
     squad_ids = [i for i in ids if squad[i].value() == 1]
-    starting_ids = [i for i in ids if start[i].value() == 1]
-    captain_id = next(i for i in ids if captain[i].value() == 1)
 
-    starters_by_xpts = sorted(starting_ids, key=lambda i: xpts[i], reverse=True)
-    vice_captain_id = next(i for i in starters_by_xpts if i != captain_id)
+    # STAGE 1 produced the 15. Its XI/captain variables existed only to shape
+    # the squad correctly (11 strong + 4 cheap bench, rather than 15 mediocre)
+    # and are DELIBERATELY DISCARDED here — see pick_xi_and_captain.
+    horizon_xi = [i for i in ids if start[i].value() == 1]
+
+    # STAGE 2: the XI and captain you actually submit, decided on the
+    # gameweek actually being played.
+    next_gw = dict(zip(pool["id"], pool["next_gw_xpts"]))
+    starting_ids, captain_id, vice_captain_id = pick_xi_and_captain(
+        squad_ids, next_gw, position, rules
+    )
 
     result_df = pool[pool["id"].isin(squad_ids)].copy()
     result_df["is_squad"] = True
@@ -123,7 +151,6 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
     result_df["is_vice_captain"] = result_df["id"] == vice_captain_id
 
     total_cost = sum(price[i] for i in squad_ids)
-    expected_points = sum(xpts[i] for i in starting_ids) + xpts[captain_id]
 
     return {
         "squad": squad_ids,
@@ -131,9 +158,63 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
         "captain": captain_id,
         "vice_captain": vice_captain_id,
         "total_cost": total_cost,
-        "expected_points": expected_points,
+        # Two separate numbers, never one ambiguous "expected_points":
+        "next_gw_expected_points": sum(next_gw[i] for i in starting_ids) + next_gw[captain_id],
+        "horizon_weighted_xpts": sum(xpts[i] for i in squad_ids),
+        # What stage 2 bought, in points: the same XI decision made on the
+        # horizon number vs on the actual gameweek. 0.0 means both agreed.
+        "xi_correction_gain": (
+            sum(next_gw[i] for i in starting_ids) + next_gw[captain_id]
+        ) - (
+            sum(next_gw[i] for i in horizon_xi)
+            + next_gw[max(horizon_xi, key=lambda i: xpts[i])]
+        ),
         "detail": result_df,
     }
+
+
+def pick_xi_and_captain(
+    squad_ids: list, next_gw_xpts: dict, position: dict, rules: dict
+) -> tuple[list, int, int]:
+    """
+    Given a fixed 15, choose the XI + captain + vice for ONE gameweek.
+
+    This is a separate solve on purpose. Squad selection is a 5-GW asset
+    decision (weighted_xpts); the XI and the armband are re-decided every
+    single week and belong to THIS gameweek only (next_gw_xpts). Solving both
+    off the horizon number — as v1 did — systematically benches players who
+    are the right start this week and hands the armband to whoever looks best
+    on a blend of five different fixtures.
+
+    Kept as its own function rather than inlined because the weekly job,
+    Bench Boost evaluation, and the retrospective "best XI of the week"
+    all need exactly this operation against different point vectors.
+    """
+    sx = rules["starting_xi"]
+    prob = pulp.LpProblem("fpl_xi", pulp.LpMaximize)
+    start = pulp.LpVariable.dicts("xi_start", squad_ids, cat="Binary")
+    cap = pulp.LpVariable.dicts("xi_captain", squad_ids, cat="Binary")
+
+    prob += pulp.lpSum((start[i] + cap[i]) * next_gw_xpts[i] for i in squad_ids)
+
+    prob += pulp.lpSum(start[i] for i in squad_ids) == sx["total"]
+    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "GK") == sx["gk"]
+    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "DEF") >= sx["min_def"]
+    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "MID") >= sx["min_mid"]
+    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "FWD") >= sx["min_fwd"]
+    prob += pulp.lpSum(cap[i] for i in squad_ids) == 1
+    for i in squad_ids:
+        prob += cap[i] <= start[i]
+
+    prob.solve(pulp.PULP_CBC_CMD(msg=False))
+    if pulp.LpStatus[prob.status] != "Optimal":
+        raise RuntimeError(f"XI selection failed: {pulp.LpStatus[prob.status]}")
+
+    starting_ids = [i for i in squad_ids if start[i].value() == 1]
+    captain_id = next(i for i in squad_ids if cap[i].value() == 1)
+    by_pts = sorted(starting_ids, key=lambda i: next_gw_xpts[i], reverse=True)
+    vice_captain_id = next(i for i in by_pts if i != captain_id)
+    return starting_ids, captain_id, vice_captain_id
 
 
 def build_gw1_squad(config: Optional[dict] = None) -> dict:
@@ -156,7 +237,12 @@ def build_gw1_squad(config: Optional[dict] = None) -> dict:
         "gameweek": int(gw),
         "total_cost": round(result["total_cost"], 1),
         "budget": config["squad_rules"]["budget_tenths"] / 10.0,
-        "expected_points": round(result["expected_points"], 2),
+        # Two distinct quantities. v1 emitted a single "expected_points" that
+        # was actually the 5-GW decay-weighted sum sitting next to
+        # "gameweek": 1 — read by anything downstream as a one-week forecast.
+        "next_gw_expected_points": round(result["next_gw_expected_points"], 2),
+        "horizon_weighted_xpts": round(result["horizon_weighted_xpts"], 2),
+        "xi_correction_gain": round(result["xi_correction_gain"], 2),
         "captain": {
             "id": int(result["captain"]),
             "web_name": detail.loc[detail["id"] == result["captain"], "web_name"].iloc[0],
@@ -184,7 +270,10 @@ def build_gw1_squad(config: Optional[dict] = None) -> dict:
 if __name__ == "__main__":
     result = build_gw1_squad()
     detail = result["detail"].sort_values(["is_starting", "position", "weighted_xpts"], ascending=[False, True, False])
-    print(f"Total cost: £{result['total_cost']:.1f}m / expected points: {result['expected_points']:.2f}\n")
+    print(f"Total cost: £{result['total_cost']:.1f}m")
+    print(f"Next-GW expected points (XI + captain): {result['next_gw_expected_points']:.2f}")
+    print(f"Squad 5-GW weighted xPts:               {result['horizon_weighted_xpts']:.2f}")
+    print(f"Gain from picking XI on the actual GW:  {result['xi_correction_gain']:+.2f}\n")
     print("STARTING XI:")
     starters = detail[detail["is_starting"]]
     print(starters[["web_name", "position", "team", "price", "weighted_xpts"]].to_string(index=False))

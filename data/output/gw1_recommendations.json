@@ -2,14 +2,16 @@
   "gameweek": 1,
   "total_cost": 100.0,
   "budget": 100.0,
-  "expected_points": 235.22,
+  "next_gw_expected_points": 66.46,
+  "horizon_weighted_xpts": 227.12,
+  "xi_correction_gain": 0.0,
   "captain": {
     "id": 411,
     "web_name": "Haaland"
   },
   "vice_captain": {
-    "id": 154,
-    "web_name": "Palmer"
+    "id": 428,
+    "web_name": "Cunha"
   },
   "squad": [
     {
@@ -18,7 +20,7 @@
       "position": "DEF",
       "team": 15,
       "price": 6.5,
-      "weighted_xpts": 17.6,
+      "weighted_xpts": 17.79,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -29,7 +31,7 @@
       "position": "DEF",
       "team": 15,
       "price": 6.0,
-      "weighted_xpts": 16.52,
+      "weighted_xpts": 16.71,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -84,7 +86,7 @@
       "position": "GK",
       "team": 1,
       "price": 6.0,
-      "weighted_xpts": 14.68,
+      "weighted_xpts": 14.53,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -98,7 +100,7 @@
       "weighted_xpts": 22.63,
       "is_starting": true,
       "is_captain": false,
-      "is_vice_captain": true
+      "is_vice_captain": false
     },
     {
       "id": 428,
@@ -109,7 +111,7 @@
       "weighted_xpts": 21.49,
       "is_starting": true,
       "is_captain": false,
-      "is_vice_captain": false
+      "is_vice_captain": true
     },
     {
       "id": 367,
@@ -139,7 +141,7 @@
       "position": "DEF",
       "team": 7,
       "price": 4.0,
-      "weighted_xpts": 6.16,
+      "weighted_xpts": 5.45,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
@@ -150,7 +152,7 @@
       "position": "DEF",
       "team": 12,
       "price": 4.0,
-      "weighted_xpts": 3.9,
+      "weighted_xpts": 3.62,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
