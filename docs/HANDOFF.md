@@ -1,12 +1,27 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-20:** Phases 0–3 complete and pushed to
-[github.com/chuongt1311-droid/fpl-points-framework](https://github.com/chuongt1311-droid/fpl-points-framework)
-(`main`, commit `7b1480d`). GW1 deadline is **2026-08-21 17:30 UTC** — the
-squad this pipeline currently recommends is in
+**Status as of 2026-08-20 (updated, post-hotfix):** Phases 0–4(1/N) done —
+data layer, research, projection model + optimiser + backtest, and a
+static dashboard, pushed through commit `e5fa065`. GW1 deadline is
+**2026-08-21 17:30 UTC**, ~26h away as of this update.
+
+The GW1 hotfix (`gw1-hotfix.patch` — conceded_pts direction fix + XI/captain
+split into their own per-gameweek solve; see §4a below) has now been
+**applied and verified** on branch `v2/hotfix-and-snapshot`:
 [`data/output/gw1_recommendations.json`](../data/output/gw1_recommendations.json)
-and is ready to submit. Phases 4–6 (dashboard, automation, validation) are
-not started; nothing about them blocks the deadline (see plan §9).
+is regenerated and its `next_gw_expected_points` (66.46) is the number to
+actually trust for GW1 — the old single `expected_points` field (235.22)
+was silently the 5-GW weighted sum, not a one-week forecast. Captain
+**Haaland**, vice-captain **Cunha** (moved from Palmer by the fix).
+`tests/test_hotfix_regressions.py` (5 tests) and `tests/test_snapshot.py`
+(6 tests) both pass — see §4a.
+
+A design spec for the next round of work — `docs/FPL_V2_DESIGN.md`
+("FPL Framework v2") — has been written and approved but is only partially
+implemented (see §4a: the hotfix and the first availability snapshot row
+are done; the rest — measurement layer, statistical core, learned
+availability — is still ahead). It supersedes nothing here; it extends
+this file's punch list with a concrete build order.
 
 This file is for whoever (human or Claude) picks this up next — it captures
 what isn't obvious from reading the code cold: why things are built the way
@@ -27,18 +42,24 @@ fpl/project/fixtures.py         3 FDR multipliers (attack/defence/defcon)
 fpl/project/minutes.py          availability gate, minutes_factor(p)
 fpl/project/defcon.py           DEFCON threshold-crossing rate
 fpl/project/project.py          assembles xPts(p,g) for GW+1..GW+5
-fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP)
+fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage per gw1-hotfix.patch
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest vs 2025-26 actuals
+fpl/collect/snapshot.py         availability snapshot writer — spec §2, new this update
+scripts/build_dashboard_data.py dashboard data-prep (reads pipeline outputs, never recomputes model)
+dashboard/                      static, self-contained HTML dashboard — Phase 4 (1/N)
 tests/verify_phase1.py          Phase 1 exit-gate check
+tests/test_hotfix_regressions.py  hotfix regressions — first pytest suite in the repo
+tests/test_snapshot.py          snapshot.py regressions
 notebooks/01_profile_research.ipynb   Phase 2 exit-gate deliverable, executed with real outputs baked in
 config.yaml                     every tunable constant — read this before touching any module
+docs/FPL_V2_DESIGN.md           the next round of work — measurement layer, statistical core, learned availability
 ```
 
 Not built yet: `fpl/decide/transfers.py`, `fpl/decide/chips.py`,
-`dashboard/`, `.github/workflows/weekly.yml`. `fpl/evaluate/backtest.py`
-exists (Phase 3's one-off exit-gate deliverable); the plan's `evaluate.py`
-(the ongoing per-GW health-tracking script referenced in §8's automation
-step 6) does not — that's Phase 5 scope.
+`.github/workflows/weekly.yml`. `fpl/evaluate/backtest.py` exists (Phase
+3's one-off exit-gate deliverable) but has three known-faulty behaviours
+(see §5 items 7–9) that spec §3.5 fixes; the plan's `evaluate.py` (ongoing
+per-GW health-tracking) still doesn't exist.
 
 **Environment gotcha:** this machine's default `python` resolves to an
 MSYS2/ucrt64 build with no prebuilt wheels for pandas/numpy (pip tries to
@@ -130,6 +151,35 @@ eye test" gate), not by code reading alone. If you change any of `baseline.py`
 before trusting it — injured players, backup keepers, and thin-sample
 outliers ranking highly are the tell.
 
+## 4a. The GW1 hotfix (applied 2026-08-20, branch `v2/hotfix-and-snapshot`)
+
+Two confirmed correctness bugs, fixed together, both regression-tested:
+
+1. **`project.py` `conceded_pts` used `fixture_defence_mult`** (high = clean
+   sheet likely); as a *penalty* term it must move the opposite way. Fixed
+   to a new, semantically distinct `fixture_concede_mult` rather than
+   reusing `fixture_defcon_mult` — the wrong multiplier read as plausible
+   precisely because its name didn't say what it meant (decision log D15 in
+   `FPL_V2_DESIGN.md`). This is what §5 finding 1 below refers to — now
+   fixed, not open.
+2. **`optimiser.py` chose the squad, the XI, and the captain all from the
+   same 5-GW decay-weighted number.** Owning a player is a 5-GW decision;
+   starting and captaining are re-decided every week. Split into two MILP
+   solves — `optimise_squad` picks the 15 on the horizon, the new
+   `pick_xi_and_captain` picks XI/captain/vice on `next_gw_xpts` alone.
+   Verified effect on the real GW1 squad: vice-captain moved Palmer → Cunha;
+   `next_gw_expected_points` (66.46) now reported separately from
+   `horizon_weighted_xpts` (227.12) — previously a single ambiguous
+   `expected_points` field held the 5-GW number next to `"gameweek": 1`.
+
+`fixtures.py` also now warns when `fixture_attack_mult`/`fixture_defence_mult`
+collapse onto the same fallback value (currently 760/760 rows, 100% —
+expected pre-season since `strength_*` is unpublished; not a bug, but must
+not be silent per spec §4.3).
+
+Both regressions are guarded by `tests/test_hotfix_regressions.py`
+(verified to fail against the pre-fix code before this was applied).
+
 ## 5. Known gaps — verified via a full code review (2026-08-20, /code-review high)
 
 A structured 7-angle review (correctness, removed-behavior, cross-file,
@@ -140,13 +190,8 @@ have been fixed yet**, this is the punch list for whoever picks this up
 next. Full detail in each finding's failure scenario (surfaced via
 `ReportFindings` in that review session); summary here:
 
-1. **`fpl/project/project.py:136` — `conceded_pts` uses the WRONG-DIRECTION
-   fixture multiplier.** Uses `fixture_defence_mult` (high = easy fixture),
-   same as `cleansheet_pts`, but as a *penalty* term this should move the
-   opposite way — `fixture_defcon_mult` (`1/fixture_defence_mult`, already
-   computed one line away) is correct. Every GK/DEF projection's
-   goals-conceded penalty currently points backwards relative to fixture
-   difficulty. **Highest-priority fix — affects every live projection.**
+1. ~~`fpl/project/project.py:136` — `conceded_pts` uses the WRONG-DIRECTION
+   fixture multiplier.~~ **FIXED 2026-08-20** — see §4a above.
 2. **`fpl/project/baseline.py:188` — confidence gate's `&` lets a
    thin-history player escape the new-signing fallback** once
    `appearances_this_season >= 3`, even with NaN per-90 rates (which
@@ -261,3 +306,22 @@ wrong, check there first before assuming a code bug.
 `docs/FPL_EXECUTION_PLAN.md` is the locked spec everything here follows —
 section numbers referenced throughout this file and the code's comments
 (e.g. "plan §4.2") point back into it.
+
+`docs/FPL_V2_DESIGN.md` is the follow-on spec (approved 2026-08-20) for
+what comes after Phase 4: an availability snapshot (irreversible, started
+this update — `data/snapshots/availability_2026-27.csv` has its first row),
+a measurement layer (regret decomposition replacing RMSE as the primary
+metric), then a statistical core (shrinkage, calibration), then a learned
+availability model — deliberately in that order, and the last item can't
+start for 10-12 gameweeks (needs that much snapshot history). Section refs
+written as "spec §x" in future commits point into it.
+
+## 9. Not yet done — do before/around GW1
+
+- **Rotate the Bzzoiro API token.** It's in plaintext in a circulated
+  `CHAT_HANDOFF.md` (not in this repo, but in a document that's been
+  shared around) — spec §1.4. This needs to happen on the token-issuing
+  service directly; nobody picking up this repo can do it from the code.
+- **`.github/workflows/weekly.yml`** (spec §2.0) — the snapshot only has
+  value if it runs on a schedule, twice a week, without anyone remembering.
+  A single manual row (done this update) is not a substitute.

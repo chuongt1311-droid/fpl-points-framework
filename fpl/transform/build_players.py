@@ -34,7 +34,7 @@ POSITION_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 # rather than fail on a missing one.
 ELEMENT_COLUMNS = [
     "id", "code", "web_name", "first_name", "second_name", "team", "element_type",
-    "now_cost", "status", "news",
+    "now_cost", "status", "news", "news_added",
     "chance_of_playing_next_round", "chance_of_playing_this_round",
     "minutes", "starts",
     "goals_scored", "assists", "clean_sheets", "goals_conceded",
