@@ -239,6 +239,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:24px
     <div class="tab" data-view="radar">Fixture Radar</div>
     <div class="tab" data-view="chips">Chip Planner</div>
     <div class="tab" data-view="health">Model Health</div>
+    <div class="tab" data-view="review">Week in Review</div>
   </nav>
 
   <!-- ===================== VIEW 1: THIS WEEK ===================== -->
@@ -374,6 +375,23 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:24px
     <div class="card">
       <h2>Known limitations</h2>
       <ul class="limitations" id="limitations-list"></ul>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW 6: WEEK IN REVIEW ===================== -->
+  <section class="view" id="view-review">
+    <div class="card">
+      <h2>Week in Review</h2>
+      <div class="note-banner" id="review-placeholder" style="margin-top:0;margin-bottom:14px;">
+        Not yet available. This tab reads <span class="mono">data/output/hindsight_gw{n}.json</span> (<span class="mono">fpl/evaluate/hindsight.py</span>, FPL_V2_DESIGN.md spec §3.3-3.4) — nothing exists there until a gameweek has actually finished and its actuals have been collected (spec §3.1, gated on FPL's own <span class="mono">data_checked</span> flag). Regret decomposition, both hindsight XIs, and the season-cumulative line will appear here once GW1 is finished.
+      </div>
+      <div id="review-content" style="display:none;">
+        <div class="kpi-row" id="review-kpis"></div>
+        <div class="card">
+          <h3>Regret decomposition — this gameweek</h3>
+          <div class="chart-box small"><canvas id="chart-regret"></canvas></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -708,6 +726,45 @@ function renderTicker(fixtures, dual){
     if(l.startsWith('KNOWN UNFIXED')) li.classList.add('flagged');
     li.textContent = l;
     list.appendChild(li);
+  });
+})();
+
+/* ===================== VIEW 6: WEEK IN REVIEW ===================== */
+(function(){
+  // Honest placeholder (dashboard/scripts/build_dashboard_data.py's own
+  // convention, matching Chip Planner) until fpl/evaluate/hindsight.py
+  // has actually run for a finished gameweek — DATA.hindsight is null
+  // until then, not a fabricated zero.
+  if(!DATA.hindsight) return;
+
+  document.getElementById('review-placeholder').style.display = 'none';
+  document.getElementById('review-content').style.display = '';
+
+  const h = DATA.hindsight;
+  const r = h.regret;
+  const kpiRow = document.getElementById('review-kpis');
+  const kpis = [
+    ['Total regret', r.total.toFixed(1)+' pts', `GW${h.gameweek}`],
+    ['Captaincy', (r.captaincy>=0?'+':'')+r.captaincy.toFixed(1), 'armband logic'],
+    ['Bench', (r.bench>=0?'+':'')+r.bench.toFixed(1), 'XI selection'],
+    ['Squad', (r.squad>=0?'+':'')+r.squad.toFixed(1), 'projection model'],
+  ];
+  kpis.forEach(([label,value,sub])=>{
+    const el = document.createElement('div'); el.className='kpi';
+    el.innerHTML = `<div class="label">${label}</div><div class="value mono">${value}</div><div class="sub">${sub}</div>`;
+    kpiRow.appendChild(el);
+  });
+
+  new Chart(document.getElementById('chart-regret'), {
+    type:'bar',
+    data:{labels:['Captaincy','Bench','Squad'], datasets:[{
+      label:'Regret (pts)',
+      data:[r.captaincy, r.bench, r.squad],
+      backgroundColor:['#D9503FCC','#F5B841CC','#8172B3CC'],
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#8A9AAE'},grid:{color:'#2B3A50'}},y:{ticks:{color:'#8A9AAE'},grid:{display:false}}}}
   });
 })();
 

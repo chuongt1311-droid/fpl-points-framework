@@ -42,6 +42,13 @@ def main():
     squad = json.loads((OUTPUT_DIR / "gw1_recommendations.json").read_text(encoding="utf-8"))
     health = json.loads((OUTPUT_DIR / "model_health.json").read_text(encoding="utf-8"))
 
+    # ---- hindsight / Week in Review (spec §3.6) — null until a gameweek
+    # has actually finished; fpl.evaluate.hindsight writes this file, this
+    # script only reads it, same committed-artefact contract as everything
+    # else here. Dashboard shows an honest placeholder when null.
+    hindsight_path = OUTPUT_DIR / f"hindsight_gw{squad['gameweek']}.json"
+    hindsight = json.loads(hindsight_path.read_text(encoding="utf-8")) if hindsight_path.exists() else None
+
     # ---- teams ----
     players_raw = pd.read_parquet(PROCESSED_DIR / "players.parquet")
     teams_df = players_raw[["team", "team_name", "team_short_name"]].drop_duplicates().sort_values("team")
@@ -180,6 +187,7 @@ def main():
         },
         "squad": squad,
         "model_health": health,
+        "hindsight": hindsight,
         "known_limitations": known_limitations,
         "teams": teams,
         "players": players_out,
