@@ -7,6 +7,11 @@ plus every season-to-date channel total the model needs (goals, assists,
 clean sheets, bonus, cards, saves, xG/xA where FPL exposes it) and the two
 availability fields (status, chance_of_playing_next_round).
 
+IMPORTANT: `id` is NOT stable across seasons — FPL reassigns it (verified:
+456 of 461 cross-referenced 2025-26/2026-27 players have a different `id`
+between seasons). `code` IS stable and must be the join key for anything
+that maps a current player to their prior-season history (fpl/project/).
+
 The full v1 new-signing rule (plan §3.3 — team/position/price-tier priors,
 `confidence: low` flag) is applied in fpl/project once prior-season history
 is joined in; this layer only computes the appearance count the rule keys off.
@@ -28,7 +33,7 @@ POSITION_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 # the API adds/renames fields season to season, so we filter to what's there
 # rather than fail on a missing one.
 ELEMENT_COLUMNS = [
-    "id", "web_name", "first_name", "second_name", "team", "element_type",
+    "id", "code", "web_name", "first_name", "second_name", "team", "element_type",
     "now_cost", "status", "news",
     "chance_of_playing_next_round", "chance_of_playing_this_round",
     "minutes", "starts",

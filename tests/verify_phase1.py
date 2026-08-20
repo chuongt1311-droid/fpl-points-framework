@@ -24,7 +24,7 @@ from fpl.collect import fpl_client, history_loader
 from fpl.transform import build_fixtures, build_players
 
 REQUIRED_PLAYER_FIELDS = [
-    "id", "web_name", "name", "team", "team_name", "position", "price",
+    "id", "code", "web_name", "name", "team", "team_name", "position", "price",
     "status", "chance_of_playing_next_round",
     "minutes", "goals_scored", "assists", "clean_sheets", "goals_conceded",
     "bonus", "yellow_cards", "red_cards", "saves",
