@@ -44,6 +44,13 @@ transfers:
   hit_cost: 4
   buffer: 1.5                  # re-tune after backtest RMSE is known (Phase 3)
 
+optimiser:
+  # plan §3.3: "the optimiser will not recommend transferring in a low
+  # confidence player unless explicitly unlocked by a toggle" — this is
+  # that toggle. Applies to initial squad selection too (picking 15 from
+  # scratch is transferring in 15 players).
+  allow_low_confidence: false
+
 chips:
   triple_captain_percentile: 0.90
   bench_boost_min_pts: 15
