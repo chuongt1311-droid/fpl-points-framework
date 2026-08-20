@@ -2,7 +2,7 @@
 # Change values here, not in code. See docs/FPL_EXECUTION_PLAN.md for the
 # rationale behind every number in this file.
 
-season: "2025-26"
+season: "2026-27"          # the season whose GW1 the plan's "~48h" deadline refers to
 
 squad_rules:
   budget_tenths: 1000        # £100.0m, in FPL's tenths-of-a-million units
@@ -73,4 +73,8 @@ api:
 history:
   repo_raw_base: "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data"
   # Last 3 completed seasons, used for per-90 baselines and backtesting.
-  seasons: ["2022-23", "2023-24", "2024-25"]
+  # 2025-26 is the most recently completed season and the only one with
+  # DEFCON scoring (see defcon.baseline_season_only above) — confirmed via
+  # the archive: 2025-26/gws/merged_gw.csv has defensive_contribution and
+  # clearances_blocks_interceptions columns; 2026-27 doesn't exist yet (404).
+  seasons: ["2023-24", "2024-25", "2025-26"]
