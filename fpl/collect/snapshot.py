@@ -33,6 +33,7 @@ which is precisely where `id` breaks.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,7 @@ import yaml
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "data" / "snapshots"
+RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 POSITION_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
@@ -68,6 +70,19 @@ _RAW_ELEMENT_COLUMNS = [
 def load_config() -> dict:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def _load_cached_bootstrap() -> dict:
+    """Reads the bootstrap-static JSON already saved by fpl.collect.fpl_client
+    — same read-not-repull pattern as build_players._load_bootstrap(). Only
+    used as a fallback when run_snapshot()/__main__ isn't handed a fresh
+    `bootstrap` dict directly."""
+    path = RAW_DIR / "bootstrap_static.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} not found — run `python -m fpl.collect.fpl_client` first."
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _snapshot_path(config: dict) -> Path:
@@ -159,17 +174,22 @@ def run_snapshot(
     path: Optional[Path] = None,
 ) -> Path:
     """
-    Entry point for the weekly job. Call immediately after
-    get_bootstrap_static(), before any transform step — pass that same
-    `bootstrap` dict in here rather than re-pulling. Pass `minutes_df` once
+    Entry point for the weekly job. Conceptually runs immediately after
+    get_bootstrap_static(), before any transform step. In this codebase's
+    one-module-per-process pattern (each pipeline stage is its own
+    `python -m fpl.x.y` invocation — see docs/HANDOFF.md §2), "immediately
+    after" means the ORDERING of steps in the job, not a shared in-process
+    dict — so if `bootstrap` isn't passed in directly, this reads the raw
+    JSON already saved to disk by fpl.collect.fpl_client's own run (same
+    pattern as build_players._load_bootstrap()) rather than live-pulling a
+    second time, which would risk a different bootstrap snapshot than the
+    rest of that same pipeline run used. Pass `minutes_df` once
     compute_minutes_factor() has run downstream; the caller is responsible
     for still calling this (with minutes_df=None) on the raw fields alone
     if the projection step fails, per the two-phase-write contract above.
     """
-    from fpl.collect import fpl_client
-
     config = config or load_config()
-    bootstrap = bootstrap if bootstrap is not None else fpl_client.get_bootstrap_static(config)
+    bootstrap = bootstrap if bootstrap is not None else _load_cached_bootstrap()
     run_id = str(uuid.uuid4())
     snapshot_ts = datetime.now(timezone.utc)
 
@@ -181,12 +201,11 @@ def run_snapshot(
 
 
 if __name__ == "__main__":
-    from fpl.collect import fpl_client
     from fpl.project import minutes as minutes_mod
     from fpl.transform import build_players
 
     cfg = load_config()
-    bs = fpl_client.get_bootstrap_static(cfg)
+    bs = _load_cached_bootstrap()
     run_id = str(uuid.uuid4())
     snapshot_ts = datetime.now(timezone.utc)
     rows = build_snapshot_rows(bs, run_id, snapshot_ts)
