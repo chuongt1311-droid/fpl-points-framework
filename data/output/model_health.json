@@ -5,42 +5,77 @@
     "2024-25"
   ],
   "n_players_tested": 537,
+  "n_players_from_tier_prior": 210,
   "scope_note": "Single retrospective split, actual minutes used, no fixture adjustment, DEFCON excluded (no leak-free training season exists) \u2014 see module docstring.",
   "rmse_by_position": {
     "DEF": {
       "n_players": 183.0,
-      "rmse": 23.038668604110384,
-      "mae": 15.336279297172563,
+      "rmse": 27.30733670902998,
+      "mae": 19.30061127977156,
       "mean_actual": 65.78142076502732,
-      "mean_predicted": 58.320886388840144
+      "mean_predicted": 49.39344553735645
     },
     "FWD": {
       "n_players": 66.0,
-      "rmse": 30.682393831220352,
-      "mae": 20.039650596226373,
+      "rmse": 17.143638954337426,
+      "mae": 11.121532915758998,
       "mean_actual": 64.12121212121212,
-      "mean_predicted": 54.04272960156764
+      "mean_predicted": 66.39294658374243
     },
     "GK": {
       "n_players": 40.0,
-      "rmse": 20.369208453756666,
-      "mae": 12.551841058599257,
+      "rmse": 12.004677948524122,
+      "mae": 8.45887074160941,
       "mean_actual": 64.1,
-      "mean_predicted": 55.36041003884983
+      "mean_predicted": 65.5673473565615
     },
     "MID": {
       "n_players": 248.0,
-      "rmse": 26.280153935711674,
-      "mae": 17.421258443125936,
+      "rmse": 21.619482818909404,
+      "mae": 14.11635833474354,
       "mean_actual": 62.80241935483871,
-      "mean_predicted": 55.576468163388675
+      "mean_predicted": 59.69096726534687
     }
   },
-  "overall_rmse": 25.425332131740213,
+  "overall_rmse": 22.733959343278947,
   "rank_correlation_by_position": {
-    "DEF": 0.928,
-    "FWD": 0.902,
-    "GK": 0.934,
-    "MID": 0.91
+    "DEF": 0.93,
+    "FWD": 0.958,
+    "GK": 0.954,
+    "MID": 0.945
+  },
+  "calibration_factors": {
+    "DEF": {
+      "goal": 0.9369630039743397,
+      "assist": 1.0872232102605839,
+      "cleansheet": 1.1057879727456355,
+      "bonus": 1.114680645063019,
+      "save": 1.0,
+      "conceded": 0.9440908293206649
+    },
+    "FWD": {
+      "goal": 0.9645473822867673,
+      "assist": 0.7523214350471275,
+      "cleansheet": 1.0,
+      "bonus": 0.9766129292027199,
+      "save": 1.0,
+      "conceded": 1.0
+    },
+    "GK": {
+      "goal": 1.0,
+      "assist": 0.9795465140696705,
+      "cleansheet": 1.0259032237830128,
+      "bonus": 0.951121825837644,
+      "save": 0.9106205905346992,
+      "conceded": 0.9475274447902314
+    },
+    "MID": {
+      "goal": 0.8578377867065213,
+      "assist": 0.9510813719561491,
+      "cleansheet": 1.0342218423263283,
+      "bonus": 0.979119960967972,
+      "save": 1.0,
+      "conceded": 1.0
+    }
   }
 }
