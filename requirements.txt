@@ -7,3 +7,4 @@ pulp==2.9.0
 streamlit==1.39.0
 plotly==5.24.1
 pytest==8.3.3
+jupyter==1.1.1     # to open/run notebooks/*.ipynb — not used by the pipeline itself
