@@ -148,36 +148,30 @@ def load_actuals() -> pd.DataFrame:
     ).rename(columns={"element": "id", **{c: f"actual_{c}" for c in channel_cols}})
 
 
-def _fill_with_tier_priors(
+def _apply_shrinkage(
     rates: pd.DataFrame, test_roster: pd.DataFrame, tier_priors: pd.DataFrame,
     position_priors: pd.DataFrame, config: dict,
 ) -> pd.DataFrame:
     """
-    Merges roster onto rates, then fills any player with insufficient
-    TRAINING history (missing entirely, or under the same 450-minute floor
-    baseline.py uses) with the position/price-tier prior — never a bare 0.
-    This is the fix for finding #7: a cold-start player used to predict
-    exactly 0 points for every channel, which both understates them AND
-    means the backtest never actually exercised this fallback path.
+    Merges roster onto rates, then SHRINKS every player's channel rates
+    toward the position/price-tier prior via baseline.shrink_rate — the
+    exact same function and k production uses (fpl/project/baseline.py),
+    not a separate zero-fill or hard-replace. This is what makes it valid
+    to tune config.shrinkage.k against this backtest's RMSE (spec §4.1) —
+    the backtest is measuring exactly what shrinkage does, not some other
+    approximation of it. Also the fix for finding #7: a cold-start player
+    used to predict exactly 0 for every channel (or, in an earlier repair
+    pass, a hard-replaced prior with no personal signal at all) — now a
+    continuous blend, same as live.
     """
-    min_historical_minutes = config["new_signing"]["min_historical_minutes"]
-    price_tier_width = config["history"]["price_tier_width"]
-
     df = test_roster.merge(rates, left_on="id", right_on="current_id", how="left")
-    df["price_tier"] = (df["price"] // price_tier_width) * price_tier_width
+    priors = baseline_mod.lookup_priors_for_all(test_roster, tier_priors, position_priors, config)
+    df = df.merge(priors, on=["id", "position"], how="left")
 
+    k = config["shrinkage"]["k"]
     channel_cols = [f"{c}_per90" for c in baseline_mod.PLAYER_CHANNELS]
-    thin_history = df["historical_minutes"].isna() | (df["historical_minutes"] < min_historical_minutes)
-
-    for idx in df[thin_history].index:
-        pos = df.loc[idx, "position"]
-        tier = df.loc[idx, "price_tier"]
-        match = tier_priors[(tier_priors["position"] == pos) & (tier_priors["price_tier"] == tier)]
-        if match.empty:
-            match = position_priors[position_priors["position"] == pos]
-        if not match.empty:
-            for col in channel_cols:
-                df.loc[idx, col] = match.iloc[0][col]
+    for col in channel_cols:
+        df[col] = baseline_mod.shrink_rate(df[col], df[f"prior_{col}"], df["weighted_minutes"], k)
 
     return df
 
@@ -198,7 +192,7 @@ def predict_points(
     cs_value = config["position_multipliers"]["clean_sheet_value"]
     rules = config["scoring_rules"]
 
-    df = _fill_with_tier_priors(rates, test_roster, tier_priors, position_priors, config)
+    df = _apply_shrinkage(rates, test_roster, tier_priors, position_priors, config)
     df = df.merge(actuals, on="id", how="inner")  # only players with real 2025-26 minutes
     df = df[df["actual_minutes"] > 0]
 

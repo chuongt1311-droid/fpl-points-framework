@@ -32,11 +32,54 @@ defcon:
   baseline_season_only: "2025-26"
 
 new_signing:
-  min_appearances: 3           # below this -> INSUFFICIENT_DATA / low confidence
-  # A player can also fail confidence with SOME history if it's too little
-  # to trust (e.g. 1 substitute minute last season) — same 450-min floor
-  # used as the qualification threshold in Phase 2's profile research.
+  # Still used to decide which players qualify to CONTRIBUTE to the
+  # position/price-tier prior average (baseline.compute_price_tier_priors,
+  # defcon.compute_price_tier_defcon_priors) — a 1-minute cameo shouldn't
+  # pollute the peer average. NOT a confidence gate any more — see
+  # `shrinkage` below (FPL_V2_DESIGN.md spec §4.1): a continuous shrinkage
+  # weight replaced the old binary min_historical_minutes cliff, which is
+  # why this key's old "below this -> low confidence" role is gone.
   min_historical_minutes: 450
+
+# Empirical-Bayes shrinkage (FPL_V2_DESIGN.md spec §4.1) — replaces the old
+# binary confidence cliff at min_historical_minutes. Per channel:
+#   rate = w * personal + (1 - w) * prior,  w = m / (m + k)
+# k is "the sample size at which personal and prior are trusted equally".
+# One k for all points-channels for now (spec: "start with one k for all
+# channels; split only if the data says to").
+shrinkage:
+  # Tuned against the repaired backtest (fpl/evaluate/backtest.py, spec
+  # §3.5) — see docs/PROJECT_LOG.md for the full sweep table and reasoning.
+  # Summary: RMSE and rank correlation both kept improving all the way out
+  # to k~20000, which would mean even Haaland (weighted_minutes=5514, above
+  # the 90th percentile of the pool) ends up MINORITY-personal (w=0.21) —
+  # directly contradicting spec §4.1's own stated expectation ("Haaland-
+  # class large-sample players barely move"), so minimising backtest loss
+  # alone is the wrong criterion here. k=1500 is chosen as the point
+  # solidly inside the range where the backtest already shows most of its
+  # improvement (RMSE 21.82->20.97, rank corr 0.942->0.947 vs the naive
+  # k=450 default) while keeping a genuinely nailed player majority-
+  # personal (Haaland w=0.79) and meaningfully correcting a thin-sample
+  # inflated-rate case (Osula w=0.44, now minority-personal — down from
+  # 0.72 at k=450). Revisit once real 2026-27 squad/bench regret data
+  # exists (spec §3.4) to confirm this against live outcomes, not just the
+  # backtest.
+  k: 1500
+  # DEFCON's personal rate is matches-based, not minutes-based — a
+  # genuinely different unit, not a second per-channel k (that restriction
+  # is about points-channels sharing minutes; see fpl/project/defcon.py).
+  # NOT backtested: 2025-26 is the only DEFCON-scored season, so there is
+  # no leak-free train/test split to tune this against (same constraint
+  # backtest.py documents for excluding DEFCON entirely). Chosen by analogy
+  # to the old MIN_MATCHES_FOR_PERSONAL_RATE=10 binary floor it replaces —
+  # revisit once a second DEFCON season exists.
+  k_defcon: 10
+  # w thresholds for the DERIVED categorical confidence label (dashboard +
+  # optimiser's `allow_low_confidence` gate still read a label, not a raw
+  # weight — plan §3.3's rule needs to keep meaning something).
+  confidence_thresholds:
+    low: 0.3
+    high: 0.7
 
 transfers:
   free_per_gw: 1
@@ -50,6 +93,16 @@ optimiser:
   # that toggle. Applies to initial squad selection too (picking 15 from
   # scratch is transferring in 15 players).
   allow_low_confidence: false
+  # Spec §4.4: small epsilon weight on every squad member in the stage-1
+  # MILP objective, breaking ties among equally-priced eligible bench
+  # players (previously arbitrary) and approximating real autosub value.
+  # 0.02 is a starting value, not yet tuned against real bench regret
+  # (spec §3.4 — no gameweek has finished to compute regret from yet).
+  # Deliberately small: a genuine starting-XI xpts difference (even a
+  # fraction of a point) must always outweigh epsilon * a bench player's
+  # xpts, or this would start distorting real selection instead of just
+  # breaking ties.
+  bench_weight_epsilon: 0.02
 
 chips:
   triple_captain_percentile: 0.90

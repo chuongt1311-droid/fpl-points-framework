@@ -51,6 +51,17 @@ from fpl.transform import build_players
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 PROJECTIONS_DIR = Path(__file__).resolve().parents[2] / "data" / "projections"
+OUTPUT_DIR = Path(__file__).resolve().parents[2] / "data" / "output"
+
+# Spec §4.2: which raw *_pts column each calibration_factors[position][channel]
+# multiplier applies to. defcon_pts, card_pts, appearance_pts are
+# deliberately NOT calibrated — see backtest.py's CALIBRATION_CHANNELS
+# docstring for why (defcon has no leak-free backtest season; cards are
+# small/noisy; appearance follows deterministically from minutes_factor).
+CHANNEL_TO_CALIBRATION_KEY = {
+    "goal_pts": "goal", "assist_pts": "assist", "cleansheet_pts": "cleansheet",
+    "bonus_pts": "bonus", "save_pts": "save", "conceded_pts": "conceded",
+}
 
 
 def load_config() -> dict:
@@ -74,11 +85,12 @@ def build_player_inputs(config: dict) -> pd.DataFrame:
     mins = minutes_mod.compute_minutes_factor(players, config)
 
     keep_base_cols = [
-        "id", "code", "web_name", "position", "price", "team", "confidence",
+        "id", "code", "web_name", "position", "price", "team", "confidence", "confidence_weight",
         "goals_scored_per90", "assists_per90", "clean_sheets_per90",
         "bonus_per90", "saves_per90", "goals_conceded_per90",
         "yellow_cards_per90", "red_cards_per90",
         "team_cs_rate", "team_goals_conceded_per90",
+        "historical_minutes", "weighted_minutes",
     ]
     out = base[keep_base_cols].merge(dc[["id", "defcon_rate"]], on="id", how="left")
     out = out.merge(mins[["id", "minutes_factor", "status"]], on="id", how="left")
@@ -94,12 +106,56 @@ def build_player_inputs(config: dict) -> pd.DataFrame:
     return out
 
 
-def compute_channel_pts_per_fixture(players_inputs: pd.DataFrame, fixture_mults: pd.DataFrame, config: dict) -> pd.DataFrame:
+def load_calibration_factors() -> dict:
+    """
+    Spec §4.2: per-(position, channel) multiplier correcting measured
+    under-prediction, fit on the repaired backtest (fpl.evaluate.backtest,
+    spec §3.5) — 'backtest for the initial value' per spec's recommendation,
+    live rolling window taking over once ~8 gameweeks exist (not built yet).
+
+    Returns {} (every factor defaults to a 1.0 no-op) if model_health.json
+    doesn't exist — calibration must degrade gracefully on a fresh checkout
+    that hasn't run the backtest, not become a hard dependency.
+    """
+    path = OUTPUT_DIR / "model_health.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data.get("calibration_factors", {})
+
+
+def apply_calibration(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
+    """
+    Explicit, inspectable final step (decision D11 — FPL_V2_DESIGN.md):
+    applied AFTER the raw channel columns are computed, never folded into
+    the channel rates themselves, so the uncorrected number stays visible
+    beside the corrected one (raw `goal_pts` next to calibrated
+    `goal_pts_cal`, etc.) — the size of the correction is always legible,
+    and 'a calibration factor that starts growing' (a warning sign per D11)
+    is something you can actually go look at.
+    """
+    for pts_col, channel_key in CHANNEL_TO_CALIBRATION_KEY.items():
+        if pts_col not in df.columns:
+            continue  # defensive: production always computes all six first, but don't assume it
+        factor_by_position = {
+            pos: calibration.get(pos, {}).get(channel_key, 1.0) for pos in ["GK", "DEF", "MID", "FWD"]
+        }
+        df[f"{pts_col}_cal"] = df[pts_col] * df["position"].map(factor_by_position).fillna(1.0)
+    return df
+
+
+def compute_channel_pts_per_fixture(
+    players_inputs: pd.DataFrame, fixture_mults: pd.DataFrame, config: dict, calibration: Optional[dict] = None,
+) -> pd.DataFrame:
     """
     One row per (player, fixture) — players_inputs joined to every fixture
     their team plays, with every channel's raw (pre-minutes-factor) points
     and the appropriate fixture multiplier already applied where relevant.
+    `calibration` defaults to load_calibration_factors() if not passed —
+    accepting it as a parameter lets callers (tests, the dashboard's
+    channel-breakdown script) pin a specific value instead of reading disk.
     """
+    calibration = calibration if calibration is not None else load_calibration_factors()
     rules = config["scoring_rules"]
     goal_mult = config["position_multipliers"]["goals"]
     assist_mult = config["position_multipliers"]["assists_flat"]
@@ -152,12 +208,17 @@ def compute_channel_pts_per_fixture(players_inputs: pd.DataFrame, fixture_mults:
     )
     df["conceded_pts"] = df["conceded_pts"].where(df["position"].isin(["GK", "DEF"]), 0.0)
 
+    # Spec §4.2: calibration is the FINAL step, on top of the raw channels
+    # above — every *_pts column computed so far is left untouched and
+    # stays readable; *_pts_cal is what xpts_fixture actually sums.
+    df = apply_calibration(df, calibration)
+
     minutes_scaled = (
-        df["goal_pts"] + df["assist_pts"] + df["defcon_pts"] + df["save_pts"]
-        + df["bonus_pts"] + df["card_pts"] + df["conceded_pts"]
+        df["goal_pts_cal"] + df["assist_pts_cal"] + df["defcon_pts"] + df["save_pts_cal"]
+        + df["bonus_pts_cal"] + df["card_pts"] + df["conceded_pts_cal"]
     ) * df["minutes_factor"]
 
-    df["xpts_fixture"] = df["appearance_pts"] + df["cleansheet_pts"] + minutes_scaled
+    df["xpts_fixture"] = df["appearance_pts"] + df["cleansheet_pts_cal"] + minutes_scaled
     return df
 
 

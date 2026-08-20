@@ -7,11 +7,19 @@ data/raw/history/*) — no network I/O. Every cross-season join goes through
 fpl.project.identity (see that module's docstring for why `id` can't be used
 directly).
 
-v1 new-signing rule (plan §3.3, locked): a player with fewer than
-config.new_signing.min_appearances appearances this season AND no bridged
-prior-season history gets confidence='low' and a team/position/price-tier
-prior instead of a personal rate — never a confidently-wrong personal number
-built on near-zero data.
+SHRINKAGE (FPL_V2_DESIGN.md spec §4.1, replaces the v1 binary confidence
+cliff): every player's per-channel rate is now `w * personal + (1-w) * prior`,
+w = weighted_minutes / (weighted_minutes + k) — see shrink_rate() below.
+This is a continuous version of the old rule ("a player with too little
+history gets a prior instead of a personal rate") that improves smoothly as
+data accumulates, rather than flipping a hard switch at
+config.new_signing.min_historical_minutes. That old threshold still gates
+who's allowed to CONTRIBUTE to the tier-prior average (compute_price_tier_priors)
+— a different, narrower job than the confidence gate it used to also do.
+
+fpl.evaluate.backtest.py reuses shrink_rate() and the prior-lookup helpers
+here directly, so k is tuned against, and RMSE reflects, exactly what
+production does — not a separate reimplementation that could silently drift.
 """
 from __future__ import annotations
 
@@ -120,6 +128,72 @@ def compute_price_tier_priors(players_df: pd.DataFrame, rates: pd.DataFrame, con
     return tier_priors, position_priors
 
 
+def shrink_rate(personal: pd.Series, prior: pd.Series, m: pd.Series, k: float) -> pd.Series:
+    """
+    Empirical-Bayes shrinkage (spec §4.1): rate = w*personal + (1-w)*prior,
+    w = m / (m + k). `m` = weighted historical minutes (or, for defcon.py,
+    weighted matches — a different unit, hence that module's own k_defcon).
+
+    m=0 (a player with literally no bridged history) makes w=0 exactly, so
+    the result must equal `prior` — personal.fillna(0) makes that safe
+    without NaN*0 propagating (pandas: NaN * 0 == NaN, not 0).
+    """
+    m_safe = m.fillna(0)
+    w = m_safe / (m_safe + k)
+    return w * personal.fillna(0) + (1 - w) * prior.fillna(0)
+
+
+def shrinkage_weight(m: pd.Series, k: float) -> pd.Series:
+    """The w itself — used as the new continuous `confidence` signal."""
+    m_safe = m.fillna(0)
+    return m_safe / (m_safe + k)
+
+
+def confidence_label(w: pd.Series, thresholds: dict) -> pd.Series:
+    """Derived categorical label from the continuous shrinkage weight, so
+    config.optimiser.allow_low_confidence and the dashboard still have a
+    label to read — spec §4.1's 'keep a derived categorical label' note."""
+    # right=False: bins are [low, high) style — w exactly AT a threshold
+    # counts as having reached it ("low: 0.3" means "w < 0.3 is low", not
+    # "w <= 0.3 is low"), matching how the config value reads.
+    return pd.cut(
+        w, bins=[-0.01, thresholds["low"], thresholds["high"], 1.01],
+        labels=["low", "medium", "high"], right=False,
+    ).astype(str)
+
+
+def lookup_priors_for_all(
+    players_df: pd.DataFrame, tier_priors: pd.DataFrame, position_priors: pd.DataFrame, config: dict,
+) -> pd.DataFrame:
+    """
+    Per-channel prior value for EVERY player (not just thin-history ones —
+    shrinkage blends every player against their prior; even a personal rate
+    built on a full 3-season sample still gets a nonzero-but-tiny (1-w)
+    weight toward it). Falls back tier -> position, same order build_baseline
+    always used for the old hard-replace fallback. Vectorized (two merges),
+    not a per-row Python loop, since this now runs for the WHOLE player pool
+    instead of just the old low-confidence subset.
+    """
+    price_tier_width = config["history"]["price_tier_width"]
+    channel_cols = [f"{c}_per90" for c in PLAYER_CHANNELS]
+
+    out = players_df[["id", "position", "price"]].copy()
+    out["price_tier"] = (out["price"] // price_tier_width) * price_tier_width
+
+    tier_renamed = tier_priors.rename(columns={c: f"prior_{c}" for c in channel_cols})
+    out = out.merge(tier_renamed, on=["position", "price_tier"], how="left")
+
+    position_renamed = position_priors.rename(columns={c: f"prior_{c}" for c in channel_cols})
+    missing = out[f"prior_{channel_cols[0]}"].isna()
+    if missing.any():
+        fallback = out.loc[missing, ["id", "position"]].merge(
+            position_renamed[["position"] + [f"prior_{c}" for c in channel_cols]], on="position", how="left"
+        )
+        out.loc[missing, [f"prior_{c}" for c in channel_cols]] = fallback[[f"prior_{c}" for c in channel_cols]].values
+
+    return out.drop(columns=["price", "price_tier"])
+
+
 def build_team_baseline(config: dict) -> pd.DataFrame:
     """
     Recency-weighted clean-sheet rate and goals-conceded/scored per-90, per
@@ -173,45 +247,40 @@ def build_baseline(players_df: Optional[pd.DataFrame] = None, config: Optional[d
     rates = compute_player_rates(history)
     tier_priors, position_priors = compute_price_tier_priors(players_df, rates, config)
     team_baseline = build_team_baseline(config)
+    priors = lookup_priors_for_all(players_df, tier_priors, position_priors, config)
 
-    min_appearances = config["new_signing"]["min_appearances"]
-    min_historical_minutes = config["new_signing"]["min_historical_minutes"]
+    k = config["shrinkage"]["k"]
+    channel_cols = [f"{c}_per90" for c in PLAYER_CHANNELS]
+
     out = players_df[["id", "code", "web_name", "position", "price", "team", "appearances_this_season"]].merge(
         rates, left_on="id", right_on="current_id", how="left"
-    )
-    out["confidence"] = "high"
-    # Insufficient = not enough current-season minutes to trust current-season
-    # form on its own, AND not enough historical minutes to trust the
-    # personal rate either — "some data" isn't "enough data" (a 1-minute
-    # cameo last season is not a basis for a personal per-90 rate).
-    thin_history = out["historical_minutes"].isna() | (out["historical_minutes"] < min_historical_minutes)
-    insufficient = (out["appearances_this_season"] < min_appearances) & thin_history
-    out.loc[insufficient, "confidence"] = "low"
-
-    price_tier_width = config["history"]["price_tier_width"]
-    out["price_tier"] = (out["price"] // price_tier_width) * price_tier_width
-
-    channel_cols = [f"{c}_per90" for c in PLAYER_CHANNELS]
-    low_conf_idx = out[out["confidence"] == "low"].index
-    for idx in low_conf_idx:
-        pos = out.loc[idx, "position"]
-        tier = out.loc[idx, "price_tier"]
-        match = tier_priors[(tier_priors["position"] == pos) & (tier_priors["price_tier"] == tier)]
-        if match.empty:
-            match = position_priors[position_priors["position"] == pos]
-        if not match.empty:
-            for col in channel_cols:
-                out.loc[idx, col] = match.iloc[0][col]
-
+    ).merge(priors, on=["id", "position"], how="left")
     out = out.merge(team_baseline, left_on="team", right_on="current_team_id", how="left")
 
-    # Clean-sheet channel for low-confidence players is sourced from their
-    # OWN team's baseline (clean sheets are a team property), not the
-    # position/price-tier peer average — more principled per plan §3.3.
+    # Clean-sheet PRIOR is sourced from the player's own team baseline
+    # (clean sheets are a team property), not the position/price-tier peer
+    # average — more principled per plan §3.3, kept from the pre-shrinkage
+    # version but now feeding the blend for every player rather than
+    # hard-replacing only low-confidence ones.
     has_team_cs = out["team_cs_rate"].notna()
-    out.loc[low_conf_idx.intersection(out[has_team_cs].index), "clean_sheets_per90"] = out.loc[
-        low_conf_idx.intersection(out[has_team_cs].index), "team_cs_rate"
-    ] * 0.75  # rough per-match-played -> per-90 discount; refined by minutes_factor downstream
+    out.loc[has_team_cs, "prior_clean_sheets_per90"] = (
+        out.loc[has_team_cs, "team_cs_rate"] * 0.75  # rough per-match-played -> per-90 discount
+    )
+
+    # SHRINKAGE (spec §4.1): every channel, every player — w*personal +
+    # (1-w)*prior, w = weighted_minutes/(weighted_minutes+k). Replaces the
+    # old binary confidence cliff outright; there is no more separate
+    # "insufficient" branch to have a boundary bug in (dissolves handoff
+    # finding #2 — the buggy `&` this used to have doesn't exist to be buggy
+    # in any more). The RAW personal rate is kept (renamed *_per90_personal)
+    # so the uncorrected number stays inspectable beside the shrunk one
+    # (same visibility principle as calibration's D11).
+    for col in channel_cols:
+        out[f"{col}_personal"] = out[col]
+        out[col] = shrink_rate(out[f"{col}_personal"], out[f"prior_{col}"], out["weighted_minutes"], k)
+
+    out["confidence_weight"] = shrinkage_weight(out["weighted_minutes"], k)
+    out["confidence"] = confidence_label(out["confidence_weight"], config["shrinkage"]["confidence_thresholds"])
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     out.to_parquet(PROCESSED_DIR / "baseline.parquet", index=False)

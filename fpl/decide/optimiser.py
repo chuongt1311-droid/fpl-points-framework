@@ -50,11 +50,23 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict:
+def optimise_squad(
+    players: pd.DataFrame, config: Optional[dict] = None, apply_availability_filters: bool = True,
+) -> dict:
     """
     players: one row per player with id, web_name, position, price, team,
     weighted_xpts, confidence, status (as produced by
     fpl.project.project.weighted_horizon_total, merged with status).
+
+    apply_availability_filters: True (default, live decision-making) drops
+    confidence='low' (unless config.optimiser.allow_low_confidence) and
+    unavailable-status players before solving — the normal, real-world
+    "don't recommend transferring in a player you can't confidently trust"
+    behaviour. False is for fpl.evaluate.hindsight's retrospective "best
+    £100m squad" benchmark (spec §3.3, decision D7): grading against
+    REALITY, a player incorrectly flagged unavailable pre-GW who then
+    played and hauled must still be eligible for that benchmark, or squad
+    regret would be systematically understated.
 
     Returns {"squad": [...15 ids...], "starting_xi": [...11...],
     "captain": id, "vice_captain": id, "total_cost": float,
@@ -64,6 +76,7 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
     config = config or load_config()
     rules = config["squad_rules"]
     allow_low_confidence = config["optimiser"]["allow_low_confidence"]
+    bench_weight_epsilon = config["optimiser"].get("bench_weight_epsilon", 0.0)
 
     # Loud, not silent. If this column ever goes missing, the old behaviour
     # (XI picked on the horizon number) is a plausible-looking wrong answer,
@@ -76,9 +89,10 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
         )
 
     pool = players.copy()
-    if not allow_low_confidence:
-        pool = pool[pool["confidence"] != "low"]
-    pool = pool[~pool["status"].isin(["i", "s", "u"])]  # never select a definitely-unavailable player
+    if apply_availability_filters:
+        if not allow_low_confidence:
+            pool = pool[pool["confidence"] != "low"]
+        pool = pool[~pool["status"].isin(["i", "s", "u"])]  # never select a definitely-unavailable player
     pool = pool.reset_index(drop=True)
 
     ids = pool["id"].tolist()
@@ -92,8 +106,22 @@ def optimise_squad(players: pd.DataFrame, config: Optional[dict] = None) -> dict
     start = pulp.LpVariable.dicts("start", ids, cat="Binary")
     captain = pulp.LpVariable.dicts("captain", ids, cat="Binary")
 
+    # Spec §4.4: a small epsilon weight on every squad member (starters
+    # included, so this ADDS to their existing full weight rather than
+    # replacing it) breaks ties the solver was previously indifferent to —
+    # equally-priced eligible bench players used to be arbitrary — and
+    # approximates real autosub value. Sized (config.optimiser.
+    # bench_weight_epsilon, default near-zero) to never outbid a genuine
+    # starting-XI improvement: it only matters when two candidate squads'
+    # STARTING xpts are otherwise tied, since a real starter-xpts
+    # difference of even a fraction of a point dwarfs epsilon * a bench
+    # player's xpts. Doesn't touch stage2's pick_xi_and_captain at all —
+    # that's a separate LP on next_gw_xpts alone, so this can't leak into
+    # which 11 actually start.
     prob += (
-        pulp.lpSum(start[i] * xpts[i] for i in ids) + pulp.lpSum(captain[i] * xpts[i] for i in ids)
+        pulp.lpSum(start[i] * xpts[i] for i in ids)
+        + pulp.lpSum(captain[i] * xpts[i] for i in ids)
+        + bench_weight_epsilon * pulp.lpSum(squad[i] * xpts[i] for i in ids)
     ), "total_expected_points"
 
     # Squad composition

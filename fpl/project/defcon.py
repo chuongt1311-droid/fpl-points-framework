@@ -8,9 +8,23 @@ average-based proxy overestimates the true rate by 0.36 on average.
 
 Only 2025-26 has DEFCON scoring (config.defcon.baseline_season_only) — this
 module does not and must not blend in earlier seasons for this channel.
-Same small-sample lesson as baseline.py (min match-count floor before a
-personal rate is trusted) and same position/price-tier prior fallback for
-players without enough personal history — code-bridged per fpl.project.identity.
+
+SHRINKAGE (FPL_V2_DESIGN.md spec §4.1): same mechanism as baseline.py's
+shrink_rate (rate = w*personal + (1-w)*prior), reused directly from there —
+but `m` here is MATCHES played, not minutes, a genuinely different unit
+(hence config.shrinkage's separate `k_defcon`, not a second per-channel k;
+that restriction is about points-channels sharing the minutes unit). This
+also dissolves handoff finding #4: `defcon_source` used to be a SEPARATE
+binary flag the optimiser had to remember to also check and didn't —
+`confidence_weight`/`defcon_source` are now just a descriptive label
+derived from the same continuous blend already baked into `defcon_rate`
+itself, nothing left to separately drop.
+
+k_defcon is NOT backtested — 2025-26 is the only DEFCON-scored season that
+exists, so there is no leak-free train/test split to tune it against (same
+constraint fpl/evaluate/backtest.py documents for excluding DEFCON
+entirely). Chosen by analogy to the old MIN_MATCHES_FOR_PERSONAL_RATE=10
+binary floor it replaces.
 """
 from __future__ import annotations
 
@@ -20,6 +34,7 @@ from typing import Optional
 import pandas as pd
 import yaml
 
+from fpl.project import baseline as baseline_mod
 from fpl.project import identity
 from fpl.transform import build_players
 
@@ -27,7 +42,10 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 HIST_DIR = Path(__file__).resolve().parents[2] / "data" / "raw" / "history"
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 
-MIN_MATCHES_FOR_PERSONAL_RATE = 10  # same floor used in the Phase 2 notebook
+# Still used to decide which players qualify to CONTRIBUTE to the
+# position/price-tier prior average — not a confidence gate any more, same
+# split as config.new_signing.min_historical_minutes in baseline.py.
+MIN_MATCHES_FOR_PERSONAL_RATE = 10
 
 
 def load_config() -> dict:
@@ -93,29 +111,43 @@ def build_defcon(players_df: Optional[pd.DataFrame] = None, config: Optional[dic
 
     personal = compute_defcon_rates(players_df, config)
     tier_priors, position_priors = compute_price_tier_defcon_priors(players_df, personal, config)
+    k_defcon = config["shrinkage"]["k_defcon"]
 
     tier_width = config["history"]["price_tier_width"]
     out = players_df[["id", "web_name", "position", "price"]].merge(personal, on="id", how="left")
     out["price_tier"] = (out["price"] // tier_width) * tier_width
 
-    enough_matches = out["defcon_matches_played"].fillna(0) >= MIN_MATCHES_FOR_PERSONAL_RATE
-    out["defcon_rate"] = out["defcon_rate_personal"].where(enough_matches)
-    out["defcon_source"] = "personal"
-    out.loc[~enough_matches, "defcon_source"] = "tier_prior"
+    # Prior lookup for every player (tier -> position fallback), same
+    # pattern as baseline.lookup_priors_for_all — vectorized, not a per-row
+    # loop.
+    tier_renamed = tier_priors.rename(columns={"defcon_rate_tier_prior": "prior_defcon_rate"})
+    out = out.merge(tier_renamed, on=["position", "price_tier"], how="left")
+    position_renamed = position_priors.rename(columns={"defcon_rate_tier_prior": "prior_defcon_rate"})
+    missing_prior = out["prior_defcon_rate"].isna()
+    if missing_prior.any():
+        fallback = out.loc[missing_prior, ["id", "position"]].merge(
+            position_renamed[["position", "prior_defcon_rate"]], on="position", how="left"
+        )
+        out.loc[missing_prior, "prior_defcon_rate"] = fallback["prior_defcon_rate"].values
+    out["prior_defcon_rate"] = out["prior_defcon_rate"].fillna(0.0)
 
-    for idx in out[~enough_matches].index:
-        pos = out.loc[idx, "position"]
-        if pos == "GK":
-            out.loc[idx, "defcon_rate"] = 0.0
-            out.loc[idx, "defcon_source"] = "not_applicable"
-            continue
-        tier = out.loc[idx, "price_tier"]
-        match = tier_priors[(tier_priors["position"] == pos) & (tier_priors["price_tier"] == tier)]
-        if match.empty:
-            match = position_priors[position_priors["position"] == pos]
-        out.loc[idx, "defcon_rate"] = match.iloc[0]["defcon_rate_tier_prior"] if not match.empty else 0.0
+    # SHRINKAGE (spec §4.1), matches-based m — see module docstring for why
+    # this is a separate k from baseline.py's minutes-based one, not a
+    # per-channel split.
+    out["defcon_rate_personal"] = out["defcon_rate_personal"].fillna(0.0)
+    out["confidence_weight"] = baseline_mod.shrinkage_weight(out["defcon_matches_played"], k_defcon)
+    out["defcon_rate"] = baseline_mod.shrink_rate(
+        out["defcon_rate_personal"], out["prior_defcon_rate"], out["defcon_matches_played"], k_defcon
+    )
+    # Purely descriptive now (dissolves handoff finding #4 — see module
+    # docstring): not a separate gate anything downstream needs to check,
+    # since confidence is already baked into defcon_rate via the blend.
+    out["defcon_source"] = pd.cut(
+        out["confidence_weight"], bins=[-0.01, 0.3, 0.7, 1.01],
+        labels=["mostly_prior", "blended", "mostly_personal"],
+    ).astype(str)
 
-    out.loc[out["position"] == "GK", ["defcon_rate", "defcon_source"]] = [0.0, "not_applicable"]
+    out.loc[out["position"] == "GK", ["defcon_rate", "defcon_source", "confidence_weight"]] = [0.0, "not_applicable", 0.0]
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     out.to_parquet(PROCESSED_DIR / "defcon.parquet", index=False)

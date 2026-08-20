@@ -67,8 +67,8 @@ def test_conceded_penalty_shrinks_on_an_easy_fixture():
 
     A penalty must move OPPOSITE to clean-sheet ease.
     """
-    easy = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(2.0), CONFIG)
-    hard = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(0.5), CONFIG)
+    easy = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(2.0), CONFIG, calibration={})
+    hard = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(0.5), CONFIG, calibration={})
 
     easy_pen = easy["conceded_pts"].iloc[0]
     hard_pen = hard["conceded_pts"].iloc[0]
@@ -83,9 +83,9 @@ def test_conceded_penalty_shrinks_on_an_easy_fixture():
 def test_conceded_penalty_is_symmetric_about_a_neutral_fixture():
     """A 2.0x-easy and a 0.5x-hard fixture are reciprocal, so their penalties
     must be reciprocal about the neutral case too."""
-    neutral = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(1.0), CONFIG)
-    easy = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(2.0), CONFIG)
-    hard = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(0.5), CONFIG)
+    neutral = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(1.0), CONFIG, calibration={})
+    easy = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(2.0), CONFIG, calibration={})
+    hard = proj.compute_channel_pts_per_fixture(_one_defender(), _fixture(0.5), CONFIG, calibration={})
 
     n = neutral["conceded_pts"].iloc[0]
     assert easy["conceded_pts"].iloc[0] == pytest.approx(n / 2.0)
