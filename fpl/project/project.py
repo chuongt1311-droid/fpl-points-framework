@@ -77,7 +77,7 @@ def build_player_inputs(config: dict) -> pd.DataFrame:
         "team_cs_rate", "team_goals_conceded_per90",
     ]
     out = base[keep_base_cols].merge(dc[["id", "defcon_rate"]], on="id", how="left")
-    out = out.merge(mins[["id", "minutes_factor"]], on="id", how="left")
+    out = out.merge(mins[["id", "minutes_factor", "status"]], on="id", how="left")
 
     # League-average fallback for teams with no bridged history (newly
     # promoted — see baseline.py) — a neutral "unknown, assume average"
@@ -110,8 +110,15 @@ def compute_channel_pts_per_fixture(players_inputs: pd.DataFrame, fixture_mults:
 
     # appearance_pts: embeds P(60+) via minutes_factor directly (see module
     # docstring) — NOT scaled again by the outer minutes_factor multiply.
+    # p1to59 must be gated on actual availability separately from the
+    # minutes_factor VALUE: a healthy fringe player with minutes_factor=0.1
+    # genuinely has residual sub-appearance probability, but a player with
+    # minutes_factor=0 because they're injured/suspended/unavailable has
+    # ZERO chance of any minutes at all — (1-0)*bench_cameo_rate would
+    # otherwise hand every injured player a phantom ~0.3 appearance_pts.
+    unavailable = df["status"].isin(["i", "s", "u"])
     p60 = df["minutes_factor"]
-    p1to59 = (1 - p60) * bench_cameo_rate
+    p1to59 = ((1 - p60) * bench_cameo_rate).where(~unavailable, 0.0)
     df["appearance_pts"] = rules["appearance_60plus"] * p60 + rules["appearance_1to59"] * p1to59
 
     # cleansheet_pts: team-level P(CS), fixture-adjusted, embeds P(60+) too.
