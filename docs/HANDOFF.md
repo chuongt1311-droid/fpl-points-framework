@@ -322,6 +322,12 @@ written as "spec §x" in future commits point into it.
   `CHAT_HANDOFF.md` (not in this repo, but in a document that's been
   shared around) — spec §1.4. This needs to happen on the token-issuing
   service directly; nobody picking up this repo can do it from the code.
-- **`.github/workflows/weekly.yml`** (spec §2.0) — the snapshot only has
-  value if it runs on a schedule, twice a week, without anyone remembering.
-  A single manual row (done this update) is not a substitute.
+- ~~`.github/workflows/weekly.yml` (spec §2.0)~~ **Built.** Runs the full
+  collect→snapshot→transform→decide→dashboard chain on the spec's 4 cron
+  touchpoints (Tue/Fri/Sat AM/Sat PM UTC) plus manual dispatch, then commits
+  regenerated artefacts back to `main` (`fpl-pipeline-bot`). Deliberately
+  excludes `fpl.evaluate.backtest` — that's a Phase 3 one-off retrospective
+  deliverable, not the ongoing per-GW `evaluate.py` the plan describes
+  (which doesn't exist yet). **Not yet verified live** — needs this repo
+  pushed to GitHub with Actions enabled before its first real scheduled
+  run; only validated locally (YAML parses, each step runs standalone).

@@ -1,0 +1,90 @@
+# FPL_V2_DESIGN.md spec §2.0 — automation as a PREREQUISITE for the
+# availability snapshot (spec §2), not a nice-to-have. A snapshot script
+# only has value if it runs reliably without anyone remembering: a human
+# forgets on busy weeks, and busy weeks correlate with congested fixture
+# schedules — exactly when rotation/injury news matter most. That
+# correlation would bias any model later fit on the result (spec §5).
+#
+# Deadlines move (midweek rounds, cup weekends, festive scheduling), so a
+# fixed cron cannot land at a constant offset from every deadline. That is
+# accepted rather than engineered around: hours_to_deadline is recorded
+# EXACTLY on every row (fpl/collect/snapshot.py), so cron drift is captured
+# IN the data rather than hidden by it.
+name: FPL weekly pipeline
+
+on:
+  schedule:
+    # All times UTC. Four touchpoints per spec §2.0's table:
+    - cron: "0 9 * * 2"   # Tue 09:00 — main run: previous GW final, projections rebuilt
+    - cron: "0 9 * * 5"   # Fri 09:00 — refresh: press conferences, injury news
+    - cron: "0 9 * * 6"   # Sat 09:00 — pre-deadline (most Saturday deadlines are 11:00/11:30)
+    - cron: "0 16 * * 6"  # Sat 16:00 — post-deadline: captures the resolved lineup picture
+  workflow_dispatch: {}   # manual trigger
+
+permissions:
+  contents: write  # needed to commit regenerated artefacts back to main
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Collect — live FPL data (bootstrap-static, fixtures)
+        run: python -m fpl.collect.fpl_client
+
+      - name: Collect — historical archive (vaastav, 3 seasons)
+        run: python -m fpl.collect.history_loader
+
+      # Spec §2.3: conceptually runs immediately after get_bootstrap_static()
+      # and before any transform step — snapshot.py reads the raw file
+      # fpl.collect.fpl_client just pulled and saved rather than re-pulling
+      # (see its own docstring). One call: __main__ internally attempts the
+      # transform/project steps itself to fill in minutes_factor, and falls
+      # back to writing the raw fields alone (minutes_factor null) if that
+      # fails — so a projection failure never costs this run its row. The
+      # transform/decide steps below are the pipeline's own separate,
+      # committed-artefact-producing run of that same work, not a second
+      # snapshot write.
+      - name: Collect — availability snapshot
+        run: python -m fpl.collect.snapshot
+
+      - name: Transform — players + fixtures tables
+        run: |
+          python -m fpl.transform.build_players
+          python -m fpl.transform.build_fixtures
+
+      # Runs the full project layer (baseline/fixtures/minutes/defcon) via
+      # optimiser.py's own import chain, then the two-stage MILP squad/XI/
+      # captain solve. Does NOT call fpl.evaluate.backtest — that is a
+      # Phase 3 one-off retrospective deliverable (docs/HANDOFF.md §6), not
+      # an ongoing per-GW check; re-running it here on a schedule would
+      # silently start treating it as something it isn't. The plan's
+      # `fpl/evaluate/evaluate.py` (ongoing, per-GW) is a separate,
+      # not-yet-built script for that job.
+      - name: Decide — squad/XI/captain recommendations
+        run: python -m fpl.decide.optimiser
+
+      - name: Dashboard data (reads pipeline outputs, never recomputes)
+        run: python scripts/build_dashboard_data.py
+        env:
+          PYTHONPATH: "."
+
+      - name: Commit + push regenerated artefacts
+        run: |
+          git config user.name "fpl-pipeline-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/processed data/projections data/output data/snapshots dashboard/data.json dashboard/index.html
+          if git diff --cached --quiet; then
+            echo "No artefact changes this run."
+          else
+            git commit -m "chore: automated pipeline run ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push
+          fi
