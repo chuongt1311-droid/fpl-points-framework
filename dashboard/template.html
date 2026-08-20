@@ -244,7 +244,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:24px
   <!-- ===================== VIEW 1: THIS WEEK ===================== -->
   <section class="view active" id="view-week">
     <div class="kpi-row">
-      <div class="kpi"><div class="label">Projected XI total</div><div class="value mono" id="kpi-total"></div><div class="sub">weighted, GW+1 decay-adjusted captain doubled</div></div>
+      <div class="kpi"><div class="label">Projected XI total</div><div class="value mono" id="kpi-total"></div><div class="sub">this gameweek only, captain doubled</div></div>
       <div class="kpi"><div class="label">Squad cost</div><div class="value mono" id="kpi-cost"></div><div class="sub" id="kpi-budget"></div></div>
       <div class="kpi"><div class="label">Captain</div><div class="value" id="kpi-captain" style="font-size:20px;"></div><div class="sub" id="kpi-vc"></div></div>
       <div class="kpi"><div class="label">Formation</div><div class="value mono" id="kpi-formation"></div><div class="sub">starting XI</div></div>
@@ -448,7 +448,10 @@ function renderTicker(fixtures, dual){
 /* ===================== VIEW 1: THIS WEEK ===================== */
 (function(){
   const sq = DATA.squad;
-  document.getElementById('kpi-total').textContent = sq.expected_points.toFixed(1);
+  // next_gw_expected_points (this gameweek's XI + captain, undecayed) — NOT
+  // horizon_weighted_xpts (the 5-GW decay-weighted squad-selection number).
+  // Post-hotfix schema: see docs/HANDOFF.md §4a.
+  document.getElementById('kpi-total').textContent = sq.next_gw_expected_points.toFixed(1);
   document.getElementById('kpi-cost').textContent = fmtMoney(sq.total_cost);
   document.getElementById('kpi-budget').textContent = `of ${fmtMoney(sq.budget)} budget`;
   document.getElementById('kpi-captain').textContent = sq.captain.web_name;

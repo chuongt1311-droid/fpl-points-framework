@@ -167,8 +167,8 @@ def main():
         "Rotation risk is backward-looking — start probability lags a manager's actual current thinking, with no notion of fixture congestion.",
         "Set-piece duties are not explicitly modelled beyond what's implicit in historical output.",
         "FDR is derived from season-long team strength ratings, which lag genuine early-season form — GW1-5 projections are the least reliable the model will ever produce.",
-        "KNOWN UNFIXED BUG: conceded_pts currently uses the wrong-direction fixture multiplier (fixture_defence_mult instead of fixture_defcon_mult) — every GK/DEF goals-conceded penalty is currently pointing backwards relative to fixture difficulty. See HANDOFF.md §5 item 1.",
-        "KNOWN UNFIXED GAP: DEFCON confidence is not surfaced separately — a player can show confidence=high overall while their DEFCON rate specifically is a tier-prior guess.",
+        "KNOWN UNFIXED GAP: DEFCON confidence is not surfaced separately — a player can show confidence=high overall while their DEFCON rate specifically is a tier-prior guess. See HANDOFF.md §5 item 4.",
+        "No shrinkage between confidence tiers — a player just over the 450-minute floor is trusted as much as one with years of history at that rate. See FPL_V2_DESIGN.md spec §4.1 (the 'Osula test').",
     ]
 
     payload = {
