@@ -39,6 +39,7 @@ import pandas as pd
 import pulp
 import yaml
 
+from fpl.decide import squad_state as squad_state_mod
 from fpl.project import project as project_mod
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
@@ -291,6 +292,13 @@ def build_gw1_squad(config: Optional[dict] = None) -> dict:
     }
     import json
     out_path.write_text(json.dumps(squad_json, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # Spec §3.2: the missing prerequisite for regret — "the 15 you owned
+    # that week." bank = leftover budget (no transfer INTO the initial
+    # squad, so there's nothing else to compute it from); free_transfers=1
+    # is what GW2 starts with, not a transfer made this GW.
+    bank = config["squad_rules"]["budget_tenths"] / 10.0 - result["total_cost"]
+    squad_state_mod.write_squad_state(gw, result, bank=bank, free_transfers=1)
 
     return result
 
