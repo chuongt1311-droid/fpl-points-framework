@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPL Points-Maximization — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<style>
+:root{
+  --dusk:        #101826;
+  --slate:       #1B2738;
+  --slate-lift:  #24334A;
+  --chalk:       #EDF1F5;
+  --chalk-dim:   #8A9AAE;
+  --floodlight:  #F5B841;
+  --grass:       #4FA96B;
+  --flag:        #D9503F;
+  --border: #2B3A50;
+  --radius: 10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--dusk);
+  color:var(--chalk);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  line-height:1.5;
+  font-size:14px;
+}
+h1,h2,h3,.display{font-family:'Archivo Narrow',sans-serif;font-weight:700;letter-spacing:0.2px;}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+a{color:inherit;}
+::selection{background:var(--floodlight);color:var(--dusk);}
+:focus-visible{outline:2px solid var(--floodlight);outline-offset:2px;}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important;}}
+
+.app{max-width:1400px;margin:0 auto;padding:20px 20px 60px;}
+
+/* ---------- header ---------- */
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:16px;
+  padding:18px 22px;background:var(--slate);border-radius:var(--radius);
+  border:1px solid var(--border);margin-bottom:18px;
+}
+.brand{display:flex;flex-direction:column;gap:2px;}
+.brand .eyebrow{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--chalk-dim);}
+.brand h1{font-size:22px;}
+.deadline{display:flex;align-items:center;gap:14px;}
+.deadline .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--chalk-dim);}
+.deadline .clock{font-size:22px;font-weight:600;color:var(--floodlight);}
+.deadline .clock.expired{color:var(--flag);}
+
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.tab{
+  padding:10px 16px;font-family:'Archivo Narrow',sans-serif;font-weight:600;font-size:15px;
+  color:var(--chalk-dim);cursor:pointer;border-bottom:2px solid transparent;
+  transition:color 120ms, border-color 120ms;user-select:none;
+}
+.tab:hover{color:var(--chalk);}
+.tab.active{color:var(--chalk);border-bottom-color:var(--floodlight);}
+
+.view{display:none;}
+.view.active{display:block;}
+
+/* ---------- generic cards ---------- */
+.card{background:var(--slate);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;}
+.card + .card{margin-top:16px;}
+.card h2{font-size:16px;margin-bottom:12px;}
+.card h3{font-size:13px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;}
+.grid-2{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+@media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+/* ---------- KPI ---------- */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:16px;}
+.kpi{background:var(--slate);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;}
+.kpi .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--chalk-dim);margin-bottom:6px;}
+.kpi .value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;}
+.kpi .sub{font-size:12px;color:var(--chalk-dim);margin-top:4px;}
+
+/* ---------- pitch ---------- */
+.pitch-wrap{display:grid;grid-template-columns:2.1fr 1fr;gap:16px;align-items:start;}
+@media(max-width:900px){.pitch-wrap{grid-template-columns:1fr;}}
+.pitch{
+  background:
+    repeating-linear-gradient(180deg,#1b3a2a 0,#1b3a2a 42px,#1a3627 42px,#1a3627 84px);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px 14px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;min-height:440px;position:relative;
+}
+.pitch::before{
+  content:"";position:absolute;inset:10px;border:1px solid rgba(237,241,245,0.18);border-radius:6px;pointer-events:none;
+}
+.pitch-row{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;position:relative;z-index:1;}
+.player-chip{
+  background:var(--slate);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;min-width:104px;text-align:center;position:relative;
+}
+.player-chip.captain{border-color:var(--floodlight);box-shadow:0 0 0 1px var(--floodlight);}
+.player-chip .badge{
+  position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;
+  background:var(--floodlight);color:var(--dusk);font-family:'JetBrains Mono',monospace;font-weight:700;
+  font-size:11px;display:flex;align-items:center;justify-content:center;
+}
+.player-chip .badge.vc{background:var(--chalk-dim);}
+.player-chip .name{font-family:'Archivo Narrow',sans-serif;font-weight:600;font-size:13.5px;}
+.player-chip .meta{font-size:11px;color:var(--chalk-dim);margin-top:2px;}
+.player-chip .pts{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--floodlight);margin-top:3px;}
+
+.bench-strip{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;}
+.bench-strip .player-chip{opacity:0.68;min-width:90px;}
+
+.summary-lines .line{padding:12px 0;border-top:1px solid var(--border);}
+.summary-lines .line:first-child{border-top:none;padding-top:0;}
+.summary-lines .tag{font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--chalk-dim);margin-bottom:4px;}
+.summary-lines .txt{font-size:13.5px;}
+
+.note-banner{
+  border:1px dashed var(--border);border-left:3px solid var(--floodlight);border-radius:6px;
+  padding:10px 14px;font-size:12.5px;color:var(--chalk-dim);margin-top:14px;
+}
+
+/* ---------- fixture ticker ---------- */
+.ticker{display:flex;gap:3px;}
+.tcell{
+  width:40px;height:30px;border-radius:4px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+  line-height:1.15;color:var(--dusk);font-weight:600;position:relative;overflow:hidden;
+}
+.tcell.dual{padding:0;}
+.tcell.dual .half{width:100%;flex:1;display:flex;align-items:center;justify-content:center;}
+.tcell .opp{opacity:0.92;}
+.diff-1{background:#3E8F5C;} .diff-2{background:var(--grass);}
+.diff-3{background:#C9A227;color:#1a1500;} .diff-4{background:#C96A3F;}
+.diff-5{background:var(--flag);}
+.mult-hi{background:var(--grass);} .mult-mid{background:#5A6C84;} .mult-lo{background:var(--flag);}
+
+/* ---------- filters / table ---------- */
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:flex-end;}
+.filter-group{display:flex;flex-direction:column;gap:4px;}
+.filter-group label{font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:var(--chalk-dim);}
+select,input[type="text"],input[type="number"]{
+  background:var(--slate-lift);border:1px solid var(--border);border-radius:6px;color:var(--chalk);
+  padding:7px 9px;font-family:'Inter',sans-serif;font-size:13px;
+}
+input[type="checkbox"]{accent-color:var(--floodlight);}
+.check-group{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--chalk-dim);}
+.chip-count{font-size:12px;color:var(--chalk-dim);margin-left:auto;}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12.8px;}
+thead th{
+  text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--chalk-dim);
+  font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;cursor:pointer;user-select:none;
+}
+thead th:hover{color:var(--chalk);}
+tbody td{padding:7px 10px;border-bottom:1px solid rgba(43,58,80,0.6);white-space:nowrap;}
+.mono-cell{font-family:'JetBrains Mono',monospace;}
+tbody tr.player-row{cursor:pointer;}
+tbody tr.player-row:hover{background:var(--slate-lift);}
+tbody tr.low-conf{border-left:2px dashed var(--chalk-dim);}
+tbody tr.detail-row{display:none;background:#182233;}
+tbody tr.detail-row.open{display:table-row;}
+tbody tr.detail-row td{padding:14px 16px;}
+.badge-pos{
+  display:inline-block;padding:2px 6px;border-radius:4px;font-size:10.5px;font-weight:700;
+  font-family:'JetBrains Mono',monospace;
+}
+.pos-GK{background:#3d3a24;color:#e3d27a;} .pos-DEF{background:#1f3a30;color:#7fd6a8;}
+.pos-MID{background:#1f2f3d;color:#7fbdd6;} .pos-FWD{background:#3d2420;color:#e39a7a;}
+.conf-low{color:var(--flag);font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;}
+.conf-high{color:var(--grass);font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;}
+.status-flag{color:var(--flag);font-size:10.5px;}
+
+.channel-bars{display:flex;flex-direction:column;gap:5px;max-width:520px;}
+.channel-bar-row{display:grid;grid-template-columns:110px 1fr 52px;align-items:center;gap:8px;font-size:11.5px;}
+.channel-bar-row .label{color:var(--chalk-dim);}
+.channel-bar-track{background:var(--dusk);border-radius:3px;height:9px;overflow:hidden;position:relative;}
+.channel-bar-fill{height:100%;background:var(--floodlight);}
+.channel-bar-fill.neg{background:var(--flag);}
+.channel-bar-row .val{font-family:'JetBrains Mono',monospace;text-align:right;}
+
+/* ---------- fixture radar ---------- */
+.radar-toggle{display:flex;gap:8px;margin-bottom:14px;}
+.radar-toggle button{
+  background:var(--slate-lift);border:1px solid var(--border);color:var(--chalk-dim);
+  padding:7px 14px;border-radius:6px;font-family:'Archivo Narrow',sans-serif;font-weight:600;
+  font-size:13px;cursor:pointer;
+}
+.radar-toggle button.active{color:var(--dusk);background:var(--floodlight);border-color:var(--floodlight);}
+.radar-grid-wrap{overflow-x:auto;}
+.radar-grid{border-collapse:collapse;}
+.radar-grid th{position:sticky;left:0;background:var(--slate);}
+.radar-grid td.team-cell{position:sticky;left:0;background:var(--slate);font-weight:600;font-family:'Archivo Narrow',sans-serif;padding:6px 10px;}
+.radar-grid td,.radar-grid th{padding:4px;text-align:center;}
+.rcell{
+  width:54px;height:34px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+}
+
+/* ---------- chip planner ---------- */
+.chip-card{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--border);}
+.chip-card:first-child{border-top:none;}
+.chip-name{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:15px;}
+.chip-status{font-size:12px;color:var(--chalk-dim);margin-top:2px;}
+.chip-threshold{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--chalk-dim);text-align:right;}
+
+/* ---------- model health ---------- */
+.limitations{display:flex;flex-direction:column;gap:8px;}
+.limitations li{list-style:none;padding:10px 12px;background:var(--slate-lift);border-radius:6px;font-size:12.8px;border-left:3px solid var(--border);}
+.limitations li.flagged{border-left-color:var(--flag);}
+.chart-box{position:relative;height:280px;}
+.chart-box.small{height:220px;}
+
+footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:24px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="eyebrow" id="season-label">Season</span>
+      <h1>FPL Points-Maximization — GW<span id="gw-label"></span></h1>
+    </div>
+    <div class="deadline">
+      <div>
+        <div class="label">Deadline</div>
+        <div class="clock mono" id="countdown">--:--:--:--</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <div class="tab active" data-view="week">This Week</div>
+    <div class="tab" data-view="explorer">Player Explorer</div>
+    <div class="tab" data-view="radar">Fixture Radar</div>
+    <div class="tab" data-view="chips">Chip Planner</div>
+    <div class="tab" data-view="health">Model Health</div>
+  </nav>
+
+  <!-- ===================== VIEW 1: THIS WEEK ===================== -->
+  <section class="view active" id="view-week">
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Projected XI total</div><div class="value mono" id="kpi-total"></div><div class="sub">weighted, GW+1 decay-adjusted captain doubled</div></div>
+      <div class="kpi"><div class="label">Squad cost</div><div class="value mono" id="kpi-cost"></div><div class="sub" id="kpi-budget"></div></div>
+      <div class="kpi"><div class="label">Captain</div><div class="value" id="kpi-captain" style="font-size:20px;"></div><div class="sub" id="kpi-vc"></div></div>
+      <div class="kpi"><div class="label">Formation</div><div class="value mono" id="kpi-formation"></div><div class="sub">starting XI</div></div>
+    </div>
+
+    <div class="pitch-wrap">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="pitch" id="pitch"></div>
+      </div>
+      <div class="card summary-lines">
+        <h2>What to do</h2>
+        <div class="line">
+          <div class="tag">Transfer</div>
+          <div class="txt">Initial squad build for GW1 — there is no prior squad to transfer from, so no transfer decision applies this week.</div>
+        </div>
+        <div class="line">
+          <div class="tag">Chip</div>
+          <div class="txt">No chip recommended this week. Chip logic (<span class="mono">fpl/decide/chips.py</span>) has not been built yet — see the Chip Planner tab.</div>
+        </div>
+        <div class="line">
+          <div class="tag">Bench order</div>
+          <div class="txt" id="bench-order-txt"></div>
+        </div>
+        <div class="note-banner" id="gw1-caveat"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bench</h2>
+      <div class="bench-strip" id="bench-strip"></div>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW 2: PLAYER EXPLORER ===================== -->
+  <section class="view" id="view-explorer">
+    <div class="card">
+      <div class="filters">
+        <div class="filter-group">
+          <label for="f-search">Search</label>
+          <input type="text" id="f-search" placeholder="Player name…" style="width:160px;">
+        </div>
+        <div class="filter-group">
+          <label for="f-pos">Position</label>
+          <select id="f-pos"><option value="">All</option><option>GK</option><option>DEF</option><option>MID</option><option>FWD</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="f-team">Club</label>
+          <select id="f-team"><option value="">All</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="f-price-max">Max price</label>
+          <input type="number" id="f-price-max" step="0.5" placeholder="£m" style="width:70px;">
+        </div>
+        <div class="filter-group">
+          <div class="check-group"><input type="checkbox" id="f-hide-low"><label for="f-hide-low">Hide low-confidence</label></div>
+        </div>
+        <div class="filter-group">
+          <div class="check-group"><input type="checkbox" id="f-hide-unavail"><label for="f-hide-unavail">Hide unavailable</label></div>
+        </div>
+        <div class="chip-count" id="explorer-count"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="explorer-table">
+          <thead>
+            <tr>
+              <th data-sort="web_name">Player</th>
+              <th data-sort="position">Pos</th>
+              <th data-sort="team_short">Club</th>
+              <th data-sort="price">Price</th>
+              <th data-sort="selected_by_percent">Own%</th>
+              <th data-sort="confidence">Conf.</th>
+              <th>Next 6</th>
+              <th data-sort="total_xpts">GW1 xPts</th>
+              <th data-sort="weighted_xpts">5-GW wxPts</th>
+            </tr>
+          </thead>
+          <tbody id="explorer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW 3: FIXTURE RADAR ===================== -->
+  <section class="view" id="view-radar">
+    <div class="card">
+      <h2>Fixture Radar — next 8 gameweeks</h2>
+      <div class="radar-toggle">
+        <button class="active" data-mode="attack_mult">Attack</button>
+        <button data-mode="defence_mult">Defence</button>
+        <button data-mode="defcon_mult">DEFCON</button>
+      </div>
+      <div class="radar-grid-wrap">
+        <table class="radar-grid" id="radar-table"></table>
+      </div>
+      <div class="note-banner">Green = favourable multiplier for this channel this gameweek, red = unfavourable. DGWs/BGWs are flagged inline when present — GW1-8 currently shows none (expected pre-season).</div>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW 4: CHIP PLANNER ===================== -->
+  <section class="view" id="view-chips">
+    <div class="card">
+      <h2>Chip Planner</h2>
+      <div class="note-banner" style="margin-top:0;margin-bottom:14px;">
+        Not yet computed. <span class="mono">fpl/decide/chips.py</span> has not been built — this tab lists the trigger thresholds already defined in <span class="mono">config.yaml</span> so the rule is visible before the logic that applies it exists. Nothing below is a live recommendation.
+      </div>
+      <div id="chip-list"></div>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW 5: MODEL HEALTH ===================== -->
+  <section class="view" id="view-health">
+    <div class="kpi-row" id="health-kpis"></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>RMSE / MAE by position</h3>
+        <div class="chart-box"><canvas id="chart-rmse"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Rank correlation by position</h3>
+        <div class="chart-box small"><canvas id="chart-rank"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Mean actual vs predicted, by position</h3>
+      <div class="chart-box"><canvas id="chart-actualpred"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Known limitations</h2>
+      <ul class="limitations" id="limitations-list"></ul>
+    </div>
+  </section>
+
+  <footer id="footer-note"></footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/;
+</script>
+<script>
+(function(){
+"use strict";
+const COLORS = ['#F5B841','#4FA96B','#7fbdd6','#D9503F','#8172B3','#e39a7a'];
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('view-'+t.dataset.view).classList.add('active');
+  });
+});
+
+/* ---------------- header ---------------- */
+document.getElementById('season-label').textContent = DATA.meta.season + ' season';
+document.getElementById('gw-label').textContent = DATA.meta.gameweek;
+document.getElementById('footer-note').textContent = DATA.meta.generated_note;
+
+function tick(){
+  const el = document.getElementById('countdown');
+  const diff = new Date(DATA.meta.deadline_utc).getTime() - Date.now();
+  if(diff <= 0){ el.textContent = 'DEADLINE PASSED'; el.classList.add('expired'); return; }
+  const d = Math.floor(diff/86400000);
+  const h = Math.floor(diff%86400000/3600000);
+  const m = Math.floor(diff%3600000/60000);
+  const s = Math.floor(diff%60000/1000);
+  el.textContent = `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+}
+tick(); setInterval(tick,1000);
+
+/* ---------------- helpers ---------------- */
+const playerById = {};
+DATA.players.forEach(p=>playerById[p.id]=p);
+
+function fmt1(v){ return (v===null||v===undefined) ? '—' : v.toFixed(1); }
+function fmtMoney(v){ return '£'+v.toFixed(1)+'m'; }
+
+function diffClass(d){ return 'diff-'+d; }
+function multClass(v){ if(v>1.05) return 'mult-hi'; if(v<0.95) return 'mult-lo'; return 'mult-mid'; }
+
+function renderTicker(fixtures, dual){
+  const wrap = document.createElement('div'); wrap.className='ticker';
+  fixtures.slice(0,6).forEach(f=>{
+    const cell = document.createElement('div');
+    if(dual){
+      cell.className = 'tcell dual';
+      const top = document.createElement('div'); top.className='half '+diffClass(f.difficulty);
+      top.textContent = f.opp + (f.home?'H':'A');
+      const bot = document.createElement('div'); bot.className='half '+multClass(f.defcon_mult);
+      bot.textContent = 'DC '+f.defcon_mult.toFixed(1);
+      cell.appendChild(top); cell.appendChild(bot);
+    } else {
+      cell.className = 'tcell '+diffClass(f.difficulty);
+      cell.innerHTML = `<span class="opp">${f.opp}${f.home?'H':'A'}</span>`;
+    }
+    wrap.appendChild(cell);
+  });
+  return wrap;
+}
+
+/* ===================== VIEW 1: THIS WEEK ===================== */
+(function(){
+  const sq = DATA.squad;
+  document.getElementById('kpi-total').textContent = sq.expected_points.toFixed(1);
+  document.getElementById('kpi-cost').textContent = fmtMoney(sq.total_cost);
+  document.getElementById('kpi-budget').textContent = `of ${fmtMoney(sq.budget)} budget`;
+  document.getElementById('kpi-captain').textContent = sq.captain.web_name;
+  document.getElementById('kpi-vc').textContent = 'Vice: '+sq.vice_captain.web_name;
+
+  const starters = sq.squad.filter(p=>p.is_starting);
+  const bench = sq.squad.filter(p=>!p.is_starting);
+  const posOrder = {FWD:0,MID:1,DEF:2,GK:3};
+  const counts = {GK:0,DEF:0,MID:0,FWD:0};
+  starters.forEach(p=>counts[p.position]++);
+  document.getElementById('kpi-formation').textContent = `${counts.DEF}-${counts.MID}-${counts.FWD}`;
+
+  const pitch = document.getElementById('pitch');
+  ['FWD','MID','DEF','GK'].forEach(pos=>{
+    const row = document.createElement('div'); row.className='pitch-row';
+    starters.filter(p=>p.position===pos).forEach(p=>{
+      const chip = document.createElement('div'); chip.className='player-chip'+(p.is_captain?' captain':'');
+      if(p.is_captain){ const b=document.createElement('div'); b.className='badge'; b.textContent='C'; chip.appendChild(b); }
+      else if(p.is_vice_captain){ const b=document.createElement('div'); b.className='badge vc'; b.textContent='V'; chip.appendChild(b); }
+      chip.innerHTML += `<div class="name">${p.web_name}</div><div class="meta">${fmtMoney(p.price)}</div><div class="pts">${p.weighted_xpts.toFixed(1)} pts</div>`;
+      row.appendChild(chip);
+    });
+    pitch.appendChild(row);
+  });
+
+  const benchStrip = document.getElementById('bench-strip');
+  bench.forEach(p=>{
+    const chip = document.createElement('div'); chip.className='player-chip';
+    chip.innerHTML = `<div class="name">${p.web_name}</div><div class="meta">${p.position} · ${fmtMoney(p.price)}</div><div class="pts">${p.weighted_xpts.toFixed(1)} pts</div>`;
+    benchStrip.appendChild(chip);
+  });
+  document.getElementById('bench-order-txt').textContent = bench.map(p=>p.web_name).join(' → ');
+
+  const lim8 = DATA.known_limitations.find(l=>l.startsWith('FDR is derived'));
+  document.getElementById('gw1-caveat').textContent = lim8 || '';
+})();
+
+/* ===================== VIEW 2: PLAYER EXPLORER ===================== */
+(function(){
+  const teamSel = document.getElementById('f-team');
+  DATA.teams.forEach(t=>{
+    const o = document.createElement('option'); o.value=t.id; o.textContent=t.short; teamSel.appendChild(o);
+  });
+
+  let sortKey = 'weighted_xpts', sortDir = 'desc';
+  let openRow = null;
+
+  function channelLabel(k){
+    return {appearance_pts:'Appearance',goal_pts:'Goals',assist_pts:'Assists',cleansheet_pts:'Clean sheet',
+      defcon_pts:'DEFCON',save_pts:'Saves',bonus_pts:'Bonus',card_pts:'Cards',conceded_pts:'Conceded'}[k];
+  }
+
+  function renderChannelBars(p){
+    const wrap = document.createElement('div'); wrap.className='channel-bars';
+    const vals = p.channels;
+    const maxAbs = Math.max(...Object.values(vals).map(v=>Math.abs(v)), 0.1);
+    Object.keys(vals).forEach(k=>{
+      const v = vals[k];
+      const row = document.createElement('div'); row.className='channel-bar-row';
+      const track = document.createElement('div'); track.className='channel-bar-track';
+      const fill = document.createElement('div'); fill.className='channel-bar-fill'+(v<0?' neg':'');
+      fill.style.width = (Math.abs(v)/maxAbs*100).toFixed(0)+'%';
+      track.appendChild(fill);
+      row.innerHTML = `<div class="label">${channelLabel(k)}</div>`;
+      row.appendChild(track);
+      const val = document.createElement('div'); val.className='val'; val.textContent=v.toFixed(2);
+      row.appendChild(val);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  function applyFilters(){
+    const q = document.getElementById('f-search').value.trim().toLowerCase();
+    const pos = document.getElementById('f-pos').value;
+    const team = document.getElementById('f-team').value;
+    const priceMax = parseFloat(document.getElementById('f-price-max').value);
+    const hideLow = document.getElementById('f-hide-low').checked;
+    const hideUnavail = document.getElementById('f-hide-unavail').checked;
+
+    let rows = DATA.players.filter(p=>{
+      if(q && !p.web_name.toLowerCase().includes(q)) return false;
+      if(pos && p.position!==pos) return false;
+      if(team && p.team!==parseInt(team)) return false;
+      if(!isNaN(priceMax) && p.price>priceMax) return false;
+      if(hideLow && p.confidence==='low') return false;
+      if(hideUnavail && p.status!=='a') return false;
+      return true;
+    });
+
+    rows.sort((a,b)=>{
+      let av=a[sortKey], bv=b[sortKey];
+      if(typeof av==='string'){ av=av||''; bv=bv||''; }
+      else { av = av===null? -Infinity: av; bv = bv===null? -Infinity: bv; }
+      const cmp = av<bv?-1:av>bv?1:0;
+      return sortDir==='asc'?cmp:-cmp;
+    });
+
+    document.getElementById('explorer-count').textContent = `${rows.length} of ${DATA.players.length} players`;
+    renderRows(rows.slice(0,300));
+  }
+
+  function renderRows(rows){
+    const tbody = document.getElementById('explorer-tbody');
+    tbody.innerHTML='';
+    rows.forEach(p=>{
+      const tr = document.createElement('tr'); tr.className='player-row'+(p.confidence==='low'?' low-conf':'');
+      tr.innerHTML = `
+        <td>${p.web_name}${p.status!=='a'?' <span class="status-flag">'+p.status.toUpperCase()+'</span>':''}</td>
+        <td><span class="badge-pos pos-${p.position}">${p.position}</span></td>
+        <td>${p.team_short}</td>
+        <td class="mono-cell">${fmtMoney(p.price)}</td>
+        <td class="mono-cell">${p.selected_by_percent!==null?p.selected_by_percent.toFixed(1)+'%':'—'}</td>
+        <td><span class="conf-${p.confidence}">${p.confidence}</span></td>
+        <td class="ticker-cell"></td>
+        <td class="mono-cell">${fmt1(p.total_xpts)}</td>
+        <td class="mono-cell">${fmt1(p.weighted_xpts)}</td>`;
+      tr.querySelector('.ticker-cell').appendChild(renderTicker(p.fixtures, p.position==='DEF'));
+      tr.addEventListener('click', ()=>toggleDetail(tr, p));
+      tbody.appendChild(tr);
+    });
+  }
+
+  function toggleDetail(tr, p){
+    if(openRow && openRow.detail){ openRow.detail.remove(); }
+    if(openRow && openRow.tr===tr){ openRow=null; return; }
+    const detail = document.createElement('tr'); detail.className='detail-row open';
+    const td = document.createElement('td'); td.colSpan=9;
+    td.innerHTML = `<h3 style="margin-bottom:8px;">Why this projection — ${p.web_name}, 5-GW decay-weighted channel breakdown</h3>`;
+    td.appendChild(renderChannelBars(p));
+    detail.appendChild(td);
+    tr.after(detail);
+    openRow = {tr, detail};
+  }
+
+  document.querySelectorAll('#explorer-table thead th[data-sort]').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const key = th.dataset.sort;
+      if(sortKey===key){ sortDir = sortDir==='asc'?'desc':'asc'; } else { sortKey=key; sortDir='desc'; }
+      applyFilters();
+    });
+  });
+  ['f-search','f-pos','f-team','f-price-max','f-hide-low','f-hide-unavail'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', applyFilters);
+  });
+  applyFilters();
+})();
+
+/* ===================== VIEW 3: FIXTURE RADAR ===================== */
+(function(){
+  let mode = 'attack_mult';
+  const table = document.getElementById('radar-table');
+
+  function render(){
+    table.innerHTML='';
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    htr.innerHTML = '<th>Club</th>' + DATA.fixture_radar.events.map(e=>`<th>GW${e}</th>`).join('');
+    thead.appendChild(htr);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    DATA.fixture_radar.teams.forEach(t=>{
+      const tr = document.createElement('tr');
+      const tdTeam = document.createElement('td'); tdTeam.className='team-cell'; tdTeam.textContent=t.short;
+      tr.appendChild(tdTeam);
+      t.cells.forEach(c=>{
+        const td = document.createElement('td');
+        const cell = document.createElement('div'); cell.className='rcell '+multClass(c[mode]);
+        cell.innerHTML = `<span>${c.opp}${c.home?'H':'A'}</span><span>${c[mode].toFixed(2)}</span>`;
+        td.appendChild(cell);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
+  document.querySelectorAll('.radar-toggle button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.radar-toggle button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); mode = btn.dataset.mode; render();
+    });
+  });
+  render();
+})();
+
+/* ===================== VIEW 4: CHIP PLANNER ===================== */
+(function(){
+  const chips = [
+    {name:'Wildcard (x2)', status:'Unlimited transfers, no hit cost. Best-window computation not yet built.', threshold:'—'},
+    {name:'Free Hit', status:'One-week squad overhaul, reverts after. Best-window computation not yet built.', threshold:`min gain ≥ ${20} pts`},
+    {name:'Bench Boost', status:'Bench points count for one GW. Best-window computation not yet built.', threshold:`min bench pts ≥ ${15}`},
+    {name:'Triple Captain', status:'Captain scores 3x for one GW. Best-window computation not yet built.', threshold:`captain in top ${(0.90*100).toFixed(0)}th percentile`},
+    {name:'Assistant Manager', status:'Not modelled in v1 (outside plan scope).', threshold:'—'},
+  ];
+  const list = document.getElementById('chip-list');
+  chips.forEach(c=>{
+    const row = document.createElement('div'); row.className='chip-card';
+    row.innerHTML = `<div><div class="chip-name">${c.name}</div><div class="chip-status">${c.status}</div></div><div class="chip-threshold">${c.threshold}</div>`;
+    list.appendChild(row);
+  });
+})();
+
+/* ===================== VIEW 5: MODEL HEALTH ===================== */
+(function(){
+  const h = DATA.model_health;
+  const kpiRow = document.getElementById('health-kpis');
+  const kpis = [
+    ['Overall RMSE', h.overall_rmse.toFixed(1)+' pts', `${h.n_players_tested} players tested`],
+    ['Test season', h.test_season, `trained on ${h.train_seasons.join(', ')}`],
+    ['Best rank corr.', Math.max(...Object.values(h.rank_correlation_by_position)).toFixed(2), 'GK, this split'],
+    ['Worst rank corr.', Math.min(...Object.values(h.rank_correlation_by_position)).toFixed(2), 'MID, this split'],
+  ];
+  kpis.forEach(([label,value,sub])=>{
+    const el = document.createElement('div'); el.className='kpi';
+    el.innerHTML = `<div class="label">${label}</div><div class="value mono">${value}</div><div class="sub">${sub}</div>`;
+    kpiRow.appendChild(el);
+  });
+
+  const positions = Object.keys(h.rmse_by_position);
+  new Chart(document.getElementById('chart-rmse'), {
+    type:'bar',
+    data:{labels:positions, datasets:[
+      {label:'RMSE', data:positions.map(p=>h.rmse_by_position[p].rmse), backgroundColor:'#F5B841CC'},
+      {label:'MAE', data:positions.map(p=>h.rmse_by_position[p].mae), backgroundColor:'#8A9AAECC'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#EDF1F5'}}},
+      scales:{x:{ticks:{color:'#8A9AAE'},grid:{display:false}},y:{ticks:{color:'#8A9AAE'},grid:{color:'#2B3A50'}}}}
+  });
+
+  new Chart(document.getElementById('chart-rank'), {
+    type:'bar',
+    data:{labels:positions, datasets:[{label:'Rank correlation', data:positions.map(p=>h.rank_correlation_by_position[p]), backgroundColor:'#4FA96BCC'}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{x:{min:0,max:1,ticks:{color:'#8A9AAE'},grid:{color:'#2B3A50'}},y:{ticks:{color:'#8A9AAE'},grid:{display:false}}}}
+  });
+
+  new Chart(document.getElementById('chart-actualpred'), {
+    type:'bar',
+    data:{labels:positions, datasets:[
+      {label:'Mean actual', data:positions.map(p=>h.rmse_by_position[p].mean_actual), backgroundColor:'#EDF1F5CC'},
+      {label:'Mean predicted', data:positions.map(p=>h.rmse_by_position[p].mean_predicted), backgroundColor:'#F5B841CC'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#EDF1F5'}}},
+      scales:{x:{ticks:{color:'#8A9AAE'},grid:{display:false}},y:{ticks:{color:'#8A9AAE'},grid:{color:'#2B3A50'}}}}
+  });
+
+  const list = document.getElementById('limitations-list');
+  DATA.known_limitations.forEach(l=>{
+    const li = document.createElement('li');
+    if(l.startsWith('KNOWN UNFIXED')) li.classList.add('flagged');
+    li.textContent = l;
+    list.appendChild(li);
+  });
+})();
+
+})();
+</script>
+</body>
+</html>
