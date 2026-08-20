@@ -62,6 +62,35 @@ position_multipliers:
     MID: 1
     FWD: 0
 
+# Fixed, universal FPL scoring rules (not tunable — real FPL rules, kept
+# here rather than hardcoded in project.py so every scoring constant lives
+# in one place per plan principle 5).
+scoring_rules:
+  appearance_60plus: 2
+  appearance_1to59: 1
+  yellow_card: -1
+  red_card: -3
+  saves_per_point: 3          # 1 pt per 3 saves
+  conceded_per_point: 2       # -1 pt per 2 goals conceded (GK/DEF only)
+
+minutes:
+  # P(1-59 mins) = (1 - minutes_factor) * bench_cameo_rate — a simple,
+  # explainable v1 approximation: most of the probability mass NOT covered
+  # by "starts and plays 60+" is "doesn't feature at all," with a smaller
+  # share going to a substitute cameo. See fpl/project/project.py.
+  bench_cameo_rate: 0.3
+  # GK-specific override (fpl/project/minutes.py): only one goalkeeper
+  # plays per match, and the rolling-start-rate signal is backward-looking
+  # (plan §10 limitation 6) — it has no notion of "who's the incumbent #1
+  # at my CURRENT club" if a keeper started regularly at a PREVIOUS club.
+  # Verified this is a real gap: it ranked a keeper with 1 start last
+  # season above his own club's 37-start ever-present #1. FPL's own price
+  # reliably signals the incumbent (checked across all 20 teams — the
+  # highest-priced GK is the recognised #1 in every case). Backup GKs
+  # (anyone but the highest-priced, ties broken by rolling_start_rate) get
+  # their minutes_factor capped at this value.
+  backup_gk_factor: 0.02
+
 data:
   history_seasons: 3
   element_summary_shortlist_size: 150   # never loop all ~700 players — plan §3.1

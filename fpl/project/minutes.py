@@ -88,10 +88,21 @@ def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = No
         start_rates, on="id", how="left"
     )
 
-    # plan §3.1: null chance_of_playing_next_round means "no news"; treat as
-    # 100 when status == 'a', otherwise leave null (status branch handles it).
-    chance = out["chance_of_playing_next_round"].copy()
-    chance = chance.where(~(chance.isna() & (out["status"] == "a")), 100)
+    # IMPORTANT: branch on the RAW chance_of_playing_next_round, not a
+    # null->100 substitution. An earlier version pre-substituted null->100
+    # per plan §3.1's "no news" note, which made `chance is not None` true
+    # for every available player and permanently skipped the `else` branch
+    # below — the one that's supposed to separate a nailed starter from a
+    # permanent bench player. Caught via testing: it put backup goalkeepers
+    # (0 minutes last season) ahead of clear #1s in the xPts eye test,
+    # because literally every healthy player got minutes_factor=1.0. FPL
+    # only ever populates chance_of_playing for genuine injury/rotation
+    # doubt — "no news" for a backup and "no news" for a nailed starter look
+    # identical in this field, so §3.1's note is about how to DISPLAY/READ
+    # the raw value elsewhere, not a substitution to make before this
+    # formula's own branch order runs. The rolling-start-rate `else` branch
+    # is where starter-vs-backup actually gets decided.
+    chance = out["chance_of_playing_next_round"]
 
     unavailable = out["status"].isin(["i", "s", "u"])
     has_chance = chance.notna()
@@ -105,7 +116,29 @@ def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = No
     factor = factor.where(~fallback, out["rolling_start_rate"])
 
     out["minutes_factor"] = factor
+    out = apply_gk_backup_override(out, players_df, config)
     return out[["id", "web_name", "status", "minutes_factor", "rolling_start_rate", "appearances_in_window"]]
+
+
+def apply_gk_backup_override(minutes_df: pd.DataFrame, players_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    Cap minutes_factor for every GK except the presumed #1 at their team —
+    see config.minutes.backup_gk_factor's docstring for why. Never RAISES a
+    factor, only caps it down, so an already-injured/unavailable "#1" stays
+    at 0 rather than being artificially propped up.
+    """
+    backup_factor = config["minutes"]["backup_gk_factor"]
+    gk_ids = players_df[players_df["position"] == "GK"][["id", "team", "price"]]
+    gk = gk_ids.merge(minutes_df[["id", "rolling_start_rate"]], on="id", how="left")
+
+    gk_sorted = gk.sort_values(["team", "price", "rolling_start_rate"], ascending=[True, False, False])
+    is_number_one = ~gk_sorted.duplicated(subset="team", keep="first")
+    number_one_ids = set(gk_sorted.loc[is_number_one, "id"])
+
+    out = minutes_df.copy()
+    is_backup_gk = out["id"].isin(gk_ids["id"]) & ~out["id"].isin(number_one_ids)
+    out.loc[is_backup_gk, "minutes_factor"] = out.loc[is_backup_gk, "minutes_factor"].clip(upper=backup_factor)
+    return out
 
 
 if __name__ == "__main__":
