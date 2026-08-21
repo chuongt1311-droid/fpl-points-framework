@@ -23,10 +23,16 @@ blocker already documented elsewhere in this file).
 **M3 (`fpl/project/understat_blend.py`, plan §B3) built and backtest-fit
 — a genuine NEGATIVE result, reported honestly, not suppressed.** M3
 does not beat M2 at any tested k_npxg (best case 0.459 top-40 rank corr
-vs M2's 0.471). Kept in the codebase as a working, tested model — just
-not promoted as the lead challenger. See PROJECT_LOG §11 for the full
-sweep and the two candidate explanations. Not done: `SourceHealth` into
-`model_health.json`.
+vs M2's 0.471). **M5 (`fpl/evaluate/ensemble.py`, plan §B5) — same
+outcome.** An out-of-sample-weighted M0+M2+M3 ensemble also underperforms
+M2 alone on the primary metric (0.5266 vs M2's 0.5966 on a held-out eval
+half) — RMSE-weighting optimises the wrong axis, plan §C2's own trap.
+**M2 is the strongest candidate found this session, full stop** — every
+model built on top of or blended with it came in weaker. Kept all three
+(M3, M5) in the codebase as working, tested models — not promoted, not
+deleted. See PROJECT_LOG §11 for both sweeps in full. Not done: `M4`
+(Sofascore — needs its own fresh ToS check, not attempted),
+`SourceHealth` into `model_health.json`.
 
 `fpl/decide/kbest.py` (plan §D1-D3) adds K-best-with-diversity: alternative
 15-man squads (`find_k_best_squads`, no-good cuts, `d=3` required per plan
@@ -108,6 +114,7 @@ fpl/collect/sources/base.py     v3 spec §A0 -- SourceAdapter protocol + SourceH
 fpl/collect/sources/understat.py v3 spec §A2 -- Understat adapter (see robots.txt note above)
 fpl/project/identity_multi.py   v3 spec §A5 -- cross-source identity bridge (FPL code <-> Understat id)
 fpl/project/understat_blend.py  v3 spec §B3 -- model M3, npxG blend (does NOT currently beat M2 -- see PROJECT_LOG §11)
+fpl/evaluate/ensemble.py        v3 spec §B5 -- model M5, out-of-sample weighted blend (also does NOT beat M2 alone -- see PROJECT_LOG §11)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)

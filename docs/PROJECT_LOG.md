@@ -932,3 +932,48 @@ dynamic here, one layer earlier than the plan expected it.
 
 4 new tests (`tests/test_understat_blend.py`) — 80 passing by default
 (81 including the network test).
+
+### Phase B5 — M5 (ensemble), another honest negative result
+
+Plan §B5: "performance-weighted blend of M0-M4... weighting fitted
+OUT-OF-SAMPLE only." Built `fpl/evaluate/ensemble.py`: fits inverse-
+RMSE-squared weights (a model with half the RMSE gets 4x the weight, not
+2x — reflects that RMSE is itself already a square root of what's being
+minimised) on one random half of `TEST_SEASON`'s tested player pool (a
+FIT half), then evaluates the blended prediction — and, for a fair
+same-set comparison, every individual model — on the DISJOINT other half
+(the EVAL half). This out-of-sample discipline matters: fitting weights
+and evaluating the ensemble on the SAME data would be circular, the same
+mistake as tuning a hyperparameter directly against a test set. 6 new
+tests (`tests/test_ensemble.py`) for the weighting/split mechanics.
+
+**Real result, run against M0+M2+M3 on real 2025-26 data**: the ensemble
+does NOT beat M2 alone. On the eval half (269 players): M2 alone scores
+top40_rank_correlation=0.5966; the full M0+M2+M3 ensemble scores only
+0.5266; even dropping the already-weaker M3 (an M0+M2-only ensemble)
+scores 0.5593 — both worse than simply using M2 by itself. Ensemble RMSE
+(20.104-20.138) IS marginally better than any individual model's RMSE in
+both configurations — but that's exactly plan §C2's own trap in action:
+RMSE-based weighting optimises the metric the ensemble was FIT on, not
+the primary top-40 rank-correlation metric it's actually judged on, and
+blending in a model that's merely "not much worse" on RMSE but clearly
+weaker on top-40 rank quality drags the blend's primary metric down even
+as it nudges the secondary one up.
+
+**Not attempted**: re-fitting weights directly against top40_rank_correlation
+instead of RMSE — with only 269 eval players and an already-thin
+fit/eval split, optimising ensemble weights against the exact metric
+being reported risks a new, smaller-scale version of the same circularity
+this module's out-of-sample split exists to avoid. Flagged as a real
+follow-up requiring more data (live per-gameweek hindsight results, once
+they exist) rather than squeezed further out of the one retrospective
+season this backtest has.
+
+**Where this leaves the bakeoff**: M2 (`xg_blend`) is the strongest
+challenger found across this entire session's model-building work — it
+beats M0 on every metric tested, and it beats every combination tried
+against it (M3 alone, M3-blended-in, ensemble). `docs/DECISION_RULE.md`
+updated with M5's row and an M4 (Sofascore) placeholder row, both
+honestly marked. None of this changes the champion — per the
+pre-registered rule (plan §C5), only real GW1-11 live data at the GW12
+review can do that.
