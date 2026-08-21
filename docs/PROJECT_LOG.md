@@ -548,3 +548,105 @@ tests — no network, no committed artefacts (spec §7.3) — except the two
 real-artefact-dependent hotfix regression tests, which now explicitly pin
 `calibration={}` so they stay deterministic regardless of what
 `model_health.json` currently holds on disk.
+
+## 11. v3 plan: Phase 0 verification + A1 + B2 (2026-08-21, GW1 day)
+
+Continuing on `main`, working from `docs/FPL_V3_PLAN.md` (the multi-source/
+model-bakeoff follow-on to v2). v3 is explicitly gated on v2's measurement
+layer (§Phase 0) being green, and most phases carry hard calendar blockers
+(GW12 review, GW20 identity-map refresh, 10-12 GWs for learned
+availability) — so this session scoped down to what's actually actionable
+today rather than attempting the whole plan.
+
+### Phase 0 verification
+
+Confirmed (not just "code exists" — actually exercised against real data):
+`data/state/squad_gw1.json` and 2 real snapshot rows already existed from
+the prior session. GW1 deadline (2026-08-21T17:30:00Z) was ~14h away at
+session start; the last snapshot was already ~14h stale (25.5h-to-deadline
+capture from the day before) — took a fresh one (3rd real row,
+`hours_to_deadline: 14.01`) since this data is irreversible once the window
+closes. Re-ran the full chain (`fpl_client` -> `build_players` ->
+`build_fixtures` -> `optimiser`) against it: recommendation held stable
+(captain Haaland, vice Cunha, same 15) — reassuring, not a stale artefact.
+
+Confirmed directly via a fresh `bootstrap-static` pull that GW1 is still
+`finished=false`/`data_checked=false`/`is_next=true` — `fpl/collect/
+actuals.py` and `fpl/evaluate/hindsight.py` remain genuinely calendar-
+blocked (the plan's own prediction), not a scoping gap. First real run:
+`actuals.py 1` then `hindsight.py 1` once GW1 settles.
+
+### Phase A1 — FPL xG/xA + set-piece order columns
+
+The plan's "free win": `bootstrap-static` already carries these
+(Opta-sourced, no scraping) but `ELEMENT_COLUMNS` didn't collect them.
+Added 12 columns to `fpl/transform/build_players.py`: per-90 xG/xA/xGI/xGC,
+`starts_per_90`, `defensive_contribution`, CBIT components, and the three
+set-piece order fields. Verified purely additive: re-ran
+`build_players -> optimiser`, squad/XI/captain output byte-identical to
+before. All 44 (then-current) tests pass.
+
+### Phase B2 — M2 (xG blend)
+
+Plan's model M2: `attacking_rate = v * xG90 + (1-v) * G90`, where `v`
+DECLINES with minutes (opposite direction to shrinkage's `w` — at low
+minutes, trust the lower-variance shot-based proxy more; at high minutes,
+trust the now-substantial personal scoring record more).
+
+Built `fpl/project/xg_blend.py`: trains personal xG90/xA90 the identical
+way `goals_scored_per90` already is (recency-weighted across
+`merged_gw.csv`'s `expected_goals`/`expected_assists` columns — generalized
+`baseline.compute_player_rates`/`compute_price_tier_priors`/
+`lookup_priors_for_all` to accept a `channels` param rather than
+duplicating the recency-weighting logic), shrinks toward a position/
+price-tier xG prior with the SAME k as goals (`config.shrinkage.k` —
+xG's sample-size-to-trust tradeoff is the same shape as goals', it is not
+the G-vs-xG blend itself), then blends with the shrunk personal rate using
+a new, separately-fitted `k_xg`.
+
+**k_xg sweep** (same methodology as the k=1500 sweep — repaired backtest,
+train 2023-24+2024-25, test 2025-26 actual minutes):
+
+| k_xg | overall RMSE | rank corr | goal RMSE | assist RMSE |
+|---|---|---|---|---|
+| (no blend, M0/M1) | 20.973 | 0.9471 | 8.646 | 5.069 |
+| 50 | 20.909 | 0.9485 | 8.555 | 5.115 |
+| 450 | 20.817 | 0.9493 | 8.430 | 5.011 |
+| **1500 (chosen)** | 20.663 | 0.9504 | 8.258 | 4.901 |
+| 4000 | 20.510 | 0.9517 | 8.111 | 4.846 |
+| 10000 | 20.416 | 0.9527 | 8.034 | 4.868 |
+
+Same pattern as the shrinkage.k sweep: RMSE and rank corr keep improving
+all the way to k_xg=10000, so minimising backtest loss alone pushes toward
+an extreme. Chose k_xg=1500 (matching shrinkage.k) — solidly inside the
+range most of the gain is banked, while keeping a large-sample player's
+rate majority-personal rather than majority-proxy. Verified directly on
+real 2026-27 players: Haaland v=0.214 (mostly his own scoring record, not
+his shot quality — weighted_minutes=5514), Osula v=0.564 (majority xG —
+weighted_minutes=1159, the thin-sample case this blend targets). The
+assist channel's own RMSE optimum sits around k_xg=4000-6000 (4.846 vs
+4.901 at k_xg=1500, ~1% difference) — not worth chasing at the cost of an
+extreme blend weight for large-sample players.
+
+Wired into `fpl/project/project.py` as an explicit `model` parameter on
+`build_player_inputs`/`project_gameweeks` (`"m0_rules"` default,
+unchanged; `"m2_xg"` swaps in the blended rate) — per plan §B1, each model
+writes its own file (`data/projections/m2_xg/gw{n}.parquet`), never the
+shared production path. Verified M0's output is byte-identical whether or
+not M2 is ever invoked (`git status` showed zero diff on
+`data/projections/gw1.parquet` after running both). Spot-checked the top
+15 by M0's weighted_xpts: M2 preserves the same ranking, with every value
+shifted modestly (mostly down 0.1-0.7 pts) — consistent with elite
+attackers' realised scoring rates running slightly ahead of their
+underlying shot quality.
+
+**Not done**: the Phase B0 model registry itself (`fpl/models/base.py`'s
+`ProjectionModel` protocol, M0 formally wrapped as a registry entry) —
+M2 exists as a callable variant of the existing pipeline, not yet a
+registered bakeoff candidate the (not-yet-built) evaluation harness can
+iterate over. M1 as a SEPARATE nested step was not built: shrinkage
+already shipped into production as part of the same-day v2 work before
+this plan was written, so there's no "M0 without shrinkage" left in the
+codebase to nest M1 on top of — same pattern as handoff findings #2/#4
+("dissolved," not fixed, because the bug's precondition no longer exists).
+5 new tests (`tests/test_xg_blend.py`) — 49 total.

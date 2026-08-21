@@ -1,5 +1,16 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A1 + B2 done):**
+See `docs/PROJECT_LOG.md` §11 for the full breakdown. GW1 snapshot/squad
+state confirmed captured (3rd real row at 14h-to-deadline); GW1 itself
+confirmed not yet finished via a live pull, so `actuals.py`/`hindsight.py`
+remain calendar-blocked as the plan predicted. `fpl/transform/
+build_players.py` now collects FPL's xG/xA per-90 + set-piece order columns
+(plan §A1, purely additive). `fpl/project/xg_blend.py` (plan §B2, model M2)
+built and backtest-fit (`k_xg=1500`) — opt-in via
+`project_gameweeks(model="m2_xg")`, writes to `data/projections/m2_xg/`,
+does not touch the production M0 path. 49 tests (was 44).
+
 **Status as of 2026-08-20 (updated, post-hotfix + v2 spec §2/§3/§4):**
 Phases 0–4(1/N) done, and most of `docs/FPL_V2_DESIGN.md` ("FPL Framework
 v2") landed the same day — see §4a/§4b below for the full breakdown. GW1
@@ -43,6 +54,7 @@ fpl/project/baseline.py         per-90 channel rates, recency-weighted, new-sign
 fpl/project/fixtures.py         3 FDR multipliers (attack/defence/defcon)
 fpl/project/minutes.py          availability gate, minutes_factor(p)
 fpl/project/defcon.py           DEFCON threshold-crossing rate
+fpl/project/xg_blend.py         v3 spec B2 -- model M2, xG/xA blend (opt-in via project_gameweeks(model="m2_xg"))
 fpl/project/project.py          assembles xPts(p,g) for GW+1..GW+5
 fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage, bench weight (spec §4.4)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2

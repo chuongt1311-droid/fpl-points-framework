@@ -81,6 +81,30 @@ shrinkage:
     low: 0.3
     high: 0.7
 
+# v3 plan §B2 (model M2): blends the shrunk personal goal/assist rate with a
+# shrunk xG90/xA90 rate — attacking_rate = v*xG90 + (1-v)*G90, v = k_xg /
+# (weighted_minutes + k_xg). NOT the same as shrinkage.k: this is the
+# G-vs-xG blend weight, not the personal-vs-prior weight (see
+# fpl/project/xg_blend.py's docstring for the distinction).
+xg_blend:
+  # Fit against the same repaired backtest as shrinkage.k (train 2023-24 +
+  # 2024-25, test 2025-26 actual minutes) — see docs/PROJECT_LOG.md for the
+  # full sweep table. Overall RMSE improved monotonically from k_xg=50
+  # (20.909) to k_xg=10000 (20.416) vs the no-blend baseline (20.973), so
+  # -- same pattern as the shrinkage.k sweep -- minimising backtest RMSE
+  # alone pushes toward an extreme. k_xg=1500 (matching shrinkage.k) is
+  # chosen instead: solidly inside the range most of the gain is already
+  # banked (RMSE 20.973->20.663, vs 20.416 at k_xg=10000), while keeping a
+  # large-sample player's rate majority-personal rather than majority-proxy
+  # (verified: Haaland v=0.214 -- mostly his own scoring record, not his
+  # shot quality; Osula v=0.564 -- majority xG, the thin-sample case this
+  # blend is meant to help). The assist channel's own RMSE optimum sits
+  # around k_xg=4000-6000 (4.846 vs 4.901 at k_xg=1500, a ~1% difference)
+  # -- not worth chasing at the cost of an extreme blend weight for
+  # large-sample players. Not yet wired into live production (M0 unchanged)
+  # -- M2 is a bakeoff candidate, not the champion; see plan §C5.
+  k_xg: 1500
+
 transfers:
   free_per_gw: 1
   max_bank: 5

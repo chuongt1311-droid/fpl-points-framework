@@ -46,6 +46,7 @@ from fpl.project import baseline as baseline_mod
 from fpl.project import defcon as defcon_mod
 from fpl.project import fixtures as fixtures_mod
 from fpl.project import minutes as minutes_mod
+from fpl.project import xg_blend as xg_blend_mod
 from fpl.transform import build_players
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
@@ -77,8 +78,18 @@ def next_n_gameweeks(n: int) -> list[int]:
     return unfinished[:n]
 
 
-def build_player_inputs(config: dict) -> pd.DataFrame:
-    """One row per player with every input the formula needs."""
+def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:
+    """
+    One row per player with every input the formula needs.
+
+    `model` selects which v3 bakeoff candidate's rates to use (plan §B1):
+      "m0_rules" (default) — the live production rates, unchanged.
+      "m2_xg"    — M0's goals_scored_per90/assists_per90 replaced by the
+                   xG-blended rate (fpl/project/xg_blend.py, plan §B2).
+                   NOT wired into the default path — must be requested
+                   explicitly, so M0's output is provably unaffected by
+                   this model existing.
+    """
     players = build_players.build_players()
     base = baseline_mod.build_baseline(players, config)
     dc = defcon_mod.build_defcon(players, config)
@@ -102,6 +113,11 @@ def build_player_inputs(config: dict) -> pd.DataFrame:
     league_avg_conceded = out["team_goals_conceded_per90"].mean()
     out["team_cs_rate"] = out["team_cs_rate"].fillna(league_avg_cs)
     out["team_goals_conceded_per90"] = out["team_goals_conceded_per90"].fillna(league_avg_conceded)
+
+    if model == "m2_xg":
+        out = xg_blend_mod.apply_xg_blend(out, config)
+    elif model != "m0_rules":
+        raise ValueError(f"Unknown model {model!r} — expected 'm0_rules' or 'm2_xg'")
 
     return out
 
@@ -222,18 +238,25 @@ def compute_channel_pts_per_fixture(
     return df
 
 
-def project_gameweeks(n_gameweeks: int = 5, config: Optional[dict] = None) -> pd.DataFrame:
+def project_gameweeks(n_gameweeks: int = 5, config: Optional[dict] = None, model: str = "m0_rules") -> pd.DataFrame:
     """
     Returns one row per (player, gameweek) for the next n_gameweeks, with
     xpts (summed over that GW's fixtures — 0 for a blank, ~2x for a double)
     and, once all n gameweeks are present, a decay-weighted total.
+
+    `model` — see build_player_inputs. "m0_rules" (default) writes to the
+    same path as always (data/projections/gw{n}.parquet — the live artefact
+    the optimiser/dashboard read). Any other model writes to its own
+    subdirectory (data/projections/{model}/gw{n}.parquet) instead, per plan
+    §B1 ("Each model writes to its own file. Never a shared file.") —
+    swapping models can never silently overwrite the production artefact.
     """
     config = config or load_config()
     gameweeks = next_n_gameweeks(n_gameweeks)
     if not gameweeks:
         raise RuntimeError("No upcoming gameweeks found in bootstrap-static events.")
 
-    players_inputs = build_player_inputs(config)
+    players_inputs = build_player_inputs(config, model=model)
     fixture_mults = fixtures_mod.compute_fixture_multipliers()
     fixture_mults = fixture_mults[fixture_mults["event"].isin(gameweeks)]
 
@@ -253,9 +276,13 @@ def project_gameweeks(n_gameweeks: int = 5, config: Optional[dict] = None) -> pd
     result["xpts"] = result["xpts"].fillna(0.0)
     result["n_fixtures"] = result["n_fixtures"].fillna(0).astype(int)
 
-    PROJECTIONS_DIR.mkdir(parents=True, exist_ok=True)
     gw1 = gameweeks[0]
-    result.to_parquet(PROJECTIONS_DIR / f"gw{gw1}.parquet", index=False)
+    if model == "m0_rules":
+        out_dir = PROJECTIONS_DIR
+    else:
+        out_dir = PROJECTIONS_DIR / model
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result.to_parquet(out_dir / f"gw{gw1}.parquet", index=False)
 
     return result
 

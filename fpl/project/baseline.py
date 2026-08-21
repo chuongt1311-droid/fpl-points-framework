@@ -77,13 +77,21 @@ def load_weighted_player_history(players_df: pd.DataFrame, config: dict) -> pd.D
     return pd.concat(frames, ignore_index=True)
 
 
-def compute_player_rates(history: pd.DataFrame) -> pd.DataFrame:
+def compute_player_rates(history: pd.DataFrame, channels: Optional[list[str]] = None) -> pd.DataFrame:
     """
     Recency-weighted per-90 rate for each channel, per current player id.
     weighted_rate = sum(weight * stat) / sum(weight * minutes / 90)
     Also carries unweighted historical_matches/historical_minutes, which
     gate the new-signing confidence flag downstream.
+
+    `channels` defaults to PLAYER_CHANNELS (goals/assists/etc., used by
+    build_baseline). fpl/project/xg_blend.py (v3 plan §B2) reuses this same
+    function with channels=["expected_goals", "expected_assists"] instead of
+    duplicating the recency-weighting logic — merged_gw.csv already carries
+    both columns, so no new history load is needed, just a different channel
+    list over the same bridged rows.
     """
+    channels = channels if channels is not None else PLAYER_CHANNELS
     played = history[history["minutes"] > 0].copy()
     played["weighted_minutes"] = played["weight"] * played["minutes"]
 
@@ -96,11 +104,11 @@ def compute_player_rates(history: pd.DataFrame) -> pd.DataFrame:
         "weighted_minutes": grouped["weighted_minutes"].sum().values,
     })
 
-    for channel in PLAYER_CHANNELS:
+    for channel in channels:
         weighted_sum = played.assign(_w=played["weight"] * played[channel]).groupby("current_id")["_w"].sum()
         out = out.merge(weighted_sum.rename(f"{channel}_weighted_sum"), on="current_id", how="left")
 
-    for channel in PLAYER_CHANNELS:
+    for channel in channels:
         out[f"{channel}_per90"] = (out[f"{channel}_weighted_sum"] * 90 / out["weighted_minutes"]).where(
             out["weighted_minutes"] > 0
         )
@@ -109,11 +117,15 @@ def compute_player_rates(history: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def compute_price_tier_priors(players_df: pd.DataFrame, rates: pd.DataFrame, config: dict) -> pd.DataFrame:
+def compute_price_tier_priors(
+    players_df: pd.DataFrame, rates: pd.DataFrame, config: dict, channels: Optional[list[str]] = None,
+) -> pd.DataFrame:
     """
     Mean per-90 rate by (position, price tier) among players who DO have
     personal history — the fallback for new signings, per plan §3.3.
+    `channels` mirrors compute_player_rates' param (see its docstring).
     """
+    channels = channels if channels is not None else PLAYER_CHANNELS
     tier_width = config["history"]["price_tier_width"]
     joined = players_df[["id", "position", "price"]].merge(
         rates, left_on="id", right_on="current_id", how="inner"
@@ -121,7 +133,7 @@ def compute_price_tier_priors(players_df: pd.DataFrame, rates: pd.DataFrame, con
     joined = joined[joined["historical_minutes"] >= 450]  # same qualification floor as Phase 2
     joined["price_tier"] = (joined["price"] // tier_width) * tier_width
 
-    channel_cols = [f"{c}_per90" for c in PLAYER_CHANNELS]
+    channel_cols = [f"{c}_per90" for c in channels]
     tier_priors = joined.groupby(["position", "price_tier"])[channel_cols].mean().reset_index()
     position_priors = joined.groupby("position")[channel_cols].mean().reset_index()
     position_priors["price_tier"] = None
@@ -164,6 +176,7 @@ def confidence_label(w: pd.Series, thresholds: dict) -> pd.Series:
 
 def lookup_priors_for_all(
     players_df: pd.DataFrame, tier_priors: pd.DataFrame, position_priors: pd.DataFrame, config: dict,
+    channels: Optional[list[str]] = None,
 ) -> pd.DataFrame:
     """
     Per-channel prior value for EVERY player (not just thin-history ones —
@@ -172,10 +185,12 @@ def lookup_priors_for_all(
     weight toward it). Falls back tier -> position, same order build_baseline
     always used for the old hard-replace fallback. Vectorized (two merges),
     not a per-row Python loop, since this now runs for the WHOLE player pool
-    instead of just the old low-confidence subset.
+    instead of just the old low-confidence subset. `channels` mirrors
+    compute_player_rates' param (see its docstring).
     """
+    channels = channels if channels is not None else PLAYER_CHANNELS
     price_tier_width = config["history"]["price_tier_width"]
-    channel_cols = [f"{c}_per90" for c in PLAYER_CHANNELS]
+    channel_cols = [f"{c}_per90" for c in channels]
 
     out = players_df[["id", "position", "price"]].copy()
     out["price_tier"] = (out["price"] // price_tier_width) * price_tier_width
