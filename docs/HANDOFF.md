@@ -1,7 +1,26 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A1 + B2 +
-C1/C2 + C5 + D done):**
+**Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A0/A1/A2/A5
++ B2 + C1/C2 + C5 + D done):**
+**Real finding — read before touching Understat again**:
+understat.com's robots.txt disallows all automated access. The user
+explicitly authorized proceeding for this private tool anyway — see
+`fpl/collect/sources/understat.py`'s module docstring for the full note
+and the containment rules this adapter is held to. Don't assume this
+authorization extends to future sessions without re-confirming, and don't
+extend the adapter's scope (e.g. per-match/shot data) without doing the
+same check again.
+
+Built `fpl/collect/sources/base.py` (A0 contract), `understat.py` (A2 —
+verified against REAL live data, 537 real 2025-26 players with real xG/
+npxG/xGChain), and `fpl/project/identity_multi.py` (A5 — cross-source
+identity bridge). Real result on 2025-26 data: 82.68% coverage (444/537
+matched), below the plan's 90% target, honestly reported as such, written
+to `data/reference/player_id_map_2025-26.csv` — NOT a live 2026-27 map,
+Understat has no 2026-27 data yet (same GW1-not-finished calendar
+blocker already documented elsewhere in this file). Not done: wiring the
+map into a real M3 model, SourceHealth into model_health.json.
+
 `fpl/decide/kbest.py` (plan §D1-D3) adds K-best-with-diversity: alternative
 15-man squads (`find_k_best_squads`, no-good cuts, `d=3` required per plan
 §D2) and alternative XIs from a fixed 15 (`find_k_best_xis`, `d=1`), plus
@@ -78,6 +97,9 @@ fpl/project/xg_blend.py         v3 spec B2 -- model M2, xG/xA blend (opt-in via 
 fpl/project/project.py          assembles xPts(p,g) for GW+1..GW+5
 fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage, bench weight (spec §4.4, v3 §D4)
 fpl/decide/kbest.py             v3 spec §D1-D3 -- K-best with diversity, frontier_spread, cross-model agreement
+fpl/collect/sources/base.py     v3 spec §A0 -- SourceAdapter protocol + SourceHealth
+fpl/collect/sources/understat.py v3 spec §A2 -- Understat adapter (see robots.txt note above)
+fpl/project/identity_multi.py   v3 spec §A5 -- cross-source identity bridge (FPL code <-> Understat id)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)

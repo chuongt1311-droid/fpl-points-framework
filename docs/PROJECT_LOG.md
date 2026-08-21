@@ -787,3 +787,99 @@ slot-assignment sub-structure in the MILP; flagged as a genuine follow-up,
 not attempted this session given the modelling gap).
 
 8 new tests (`tests/test_kbest.py`) — 61 total.
+
+### Phase A0 / A2 / A5 — source adapter contract, Understat adapter, identity mapping
+
+**Real finding, surfaced immediately and put to the user before writing any
+scraping code**: understat.com's `robots.txt` disallows ALL automated
+access (`Disallow: /`). The v3 plan (§A2) classified Understat as
+lower-risk "enrichment tier," distinct from Sofascore's explicit ToS-risk
+quarantine (D1/D2), but doesn't appear to have checked robots.txt when
+making that call. Stopped and asked before proceeding — the user reviewed
+and explicitly authorized continuing for this private, local,
+non-redistributed tool. Recorded as a standing note in
+`fpl/collect/sources/understat.py`'s module docstring: this is not a
+default future sessions should assume still stands, and the adapter is
+held to at least Sofascore's A3 containment rules (rate limit, honest UA,
+no evasion, stop rather than escalate) even though the plan only formally
+required those for the quarantined tier.
+
+**Also found**: Understat's page no longer embeds player data as an
+inline `JSON.parse(...)` blob the way the plan's scraping approach (and
+most public guides) describe — confirmed by inspecting real network
+traffic via the browser tool. The actual mechanism: the league page sets
+a session cookie, then client-side JS calls
+`GET /getLeagueData/{league}/{season}` with a matching `Referer` header,
+returning `{teams, players, dates}` as real JSON. Replicated with a plain
+`requests.Session` (page load, then the API call with `Referer` — the
+same two-step flow the site's own JS performs, not a bypass of anything).
+
+Built:
+- **`fpl/collect/sources/base.py`** (plan §A0) — `SourceAdapter` Protocol +
+  `SourceHealth` dataclass, the three hard rules (degrade never crash,
+  append-only raw file, health reported every run) as docstring
+  requirements every real adapter restates.
+- **`fpl/collect/sources/understat.py`** (plan §A2) — `UnderstatAdapter`.
+  Caches to `data/raw/understat/{season}.csv`, never re-fetches once
+  cached (a completed season never changes). Verified against REAL live
+  data: `fetch("2025")` returns 537 real 2025-26 Premier League players
+  with real xG/npxG/xA/xGChain/xGBuildup (Haaland: xG=28.80, npxG=25.75,
+  matches his real season). Verified graceful degradation on a bad
+  request (404 -> empty DataFrame + `health().error` set, no crash) and
+  that a cache hit never touches the network (0.5s vs a real ~7s
+  page+API round trip). **Scope note, documented not hidden**: the
+  endpoint gives season-TO-DATE aggregates, not per-gameweek splits —
+  the literal `SourceAdapter.fetch(gameweek)` signature doesn't fit
+  Understat's actual data model; would need date-bucketing against
+  `fpl/transform/build_fixtures.py`'s gameweek table, a real follow-up.
+  4 tests network-independent (mocked `_fetch_live`), 1 real network test
+  (`@pytest.mark.network`, excluded from the default suite via new
+  `pytest.ini` — `addopts = -m "not network"` — run explicitly with
+  `pytest tests/ -v -m network`).
+- **`fpl/project/identity_multi.py`** (plan §A5) — cross-SOURCE identity
+  bridge (FPL `code` <-> Understat `source_player_id`), distinct from
+  `fpl/project/identity.py`'s cross-SEASON bridge. Exactly the plan's
+  specified design: normalise (strip diacritics, lowercase, drop
+  punctuation, **plus html.unescape — real bug found against live data,
+  Understat's `player_name` carries raw HTML entities like
+  `Matt O&#039;Riley`**), exact `(name, team)` match = high confidence,
+  fuzzy fallback (>=0.82 SequenceMatcher ratio, team-restricted to avoid
+  cross-team false positives) = medium confidence -> review queue, NEVER
+  auto-accepted. Genuinely unmatched players get no row at all — not a
+  null, not a zero (finding #11's bug, not reintroduced here).
+  **Added a real third pass beyond the plan's literal spec**: exact
+  name-only match (team ignored) when the normalised name is unique on
+  BOTH sides among the still-unmatched pool — recovers a real, verified
+  gap: some historical archive CSVs already reflect a LATER team
+  transfer than the season being matched (confirmed directly — Eze's
+  2025-26 `players_raw.csv` record already shows Arsenal, his 2026-27
+  club, not Crystal Palace, his actual 2025-26 club), so team-qualified
+  matching alone silently missed an otherwise-unambiguous exact name
+  match.
+
+**Real result, run against real 2025-26 data** (both FPL's own archive
+and a live Understat fetch): of 537 FPL players with real 2025-26
+minutes, **444 matched (82.68% coverage)** — 416 high confidence
+(405 exact name+team, 11 exact name-only-unique), 28 medium confidence
+in the review queue. Below the plan's own >=90% coverage target — the
+remaining ~17% is genuinely unmatched (not silently dropped: `coverage_pct`
+makes the gap a visible, reportable number, per plan §A5 "coverage is a
+health metric"), a real, honest state for a first pass, not a passing
+gate. Written to `data/reference/player_id_map_2025-26.csv` (444 rows) and
+`..._review_queue.csv` (28 rows, for a human to work through). **Named
+explicitly by season** (`_2025-26` suffix) rather than a plain
+`player_id_map.csv` — this is the completed-season validation exercise
+the real numbers above come from, NOT a live 2026-27 map (Understat has
+no 2026-27 data yet — GW1 hasn't finished, same calendar blocker already
+documented for `actuals.py`/`hindsight.py`). Producing the real 2026-27
+map is a rerun of the same pipeline once real 2026-27 matches exist on
+Understat.
+
+**Not done**: wiring this map into `fpl/project/xg_blend.py` or a new M3
+model (plan's B3, `understat` — npxG/xGChain/set-piece/shot-quality
+features) — this session built and validated the identity bridge and the
+adapter, not the model that consumes them. `SourceHealth` also isn't yet
+written into `model_health.json` (A0 rule 3) — a real follow-up.
+
+21 new tests (4 `test_understat_adapter.py` non-network + 1 network,
+12 `test_identity_multi.py`) — 76 total (77 including the network test).
