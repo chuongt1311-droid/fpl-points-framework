@@ -7,6 +7,12 @@ plus every season-to-date channel total the model needs (goals, assists,
 clean sheets, bonus, cards, saves, xG/xA where FPL exposes it) and the two
 availability fields (status, chance_of_playing_next_round).
 
+v3 plan §A1: also carries FPL's Opta-sourced per-90 xG/xA fields and the
+set-piece order columns (corners/free-kicks/penalties) — no new source,
+no scraping, one-line addition to ELEMENT_COLUMNS. Purely additive: not
+yet read by baseline.py/project.py, so M0's output is unchanged (verified:
+same squad/XI/captain before and after).
+
 IMPORTANT: `id` is NOT stable across seasons — FPL reassigns it (verified:
 456 of 461 cross-referenced 2025-26/2026-27 players have a different `id`
 between seasons). `code` IS stable and must be the join key for anything
@@ -42,6 +48,12 @@ ELEMENT_COLUMNS = [
     "yellow_cards", "red_cards", "saves", "bonus", "bps",
     "expected_goals", "expected_assists", "expected_goal_involvements",
     "expected_goals_conceded",
+    "expected_goals_per_90", "expected_assists_per_90",
+    "expected_goal_involvements_per_90", "expected_goals_conceded_per_90",
+    "starts_per_90", "defensive_contribution",
+    "clearances_blocks_interceptions", "recoveries", "tackles",
+    "corners_and_indirect_freekicks_order", "direct_freekicks_order",
+    "penalties_order",
     "form", "points_per_game", "total_points", "selected_by_percent",
     "ep_next", "ep_this",
 ]
