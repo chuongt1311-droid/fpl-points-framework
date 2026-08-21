@@ -1,6 +1,7 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A1 + B2 done):**
+**Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A1 + B2 +
+C1/C2 + C5 done):**
 See `docs/PROJECT_LOG.md` §11 for the full breakdown. GW1 snapshot/squad
 state confirmed captured (3rd real row at 14h-to-deadline); GW1 itself
 confirmed not yet finished via a live pull, so `actuals.py`/`hindsight.py`
@@ -9,7 +10,16 @@ build_players.py` now collects FPL's xG/xA per-90 + set-piece order columns
 (plan §A1, purely additive). `fpl/project/xg_blend.py` (plan §B2, model M2)
 built and backtest-fit (`k_xg=1500`) — opt-in via
 `project_gameweeks(model="m2_xg")`, writes to `data/projections/m2_xg/`,
-does not touch the production M0 path. 49 tests (was 44).
+does not touch the production M0 path. `fpl.evaluate.backtest` now reports
+`top40_rank_correlation` (plan §C1/§C2's PRIMARY metric — 0.444 for M0 vs
+the misleadingly-high 0.90-0.97 full-pool rank correlation already
+reported) and supports the same `model=` param, writing challenger results
+to `model_health_{model}.json` rather than the production file. **Caught
+and fixed a real leakage bug** while wiring this up — see §11 in
+PROJECT_LOG. `docs/DECISION_RULE.md` (plan §C5) written and committed
+BEFORE GW2 data exists — the pre-registered GW12 champion-selection rule;
+current champion M0, M2 listed as a backtest-favourable but not-yet-live
+candidate. 53 tests (was 44).
 
 **Status as of 2026-08-20 (updated, post-hotfix + v2 spec §2/§3/§4):**
 Phases 0–4(1/N) done, and most of `docs/FPL_V2_DESIGN.md` ("FPL Framework
@@ -65,11 +75,14 @@ fpl/collect/actuals.py          per-GW actuals collector — spec §3.1, unteste
 scripts/build_dashboard_data.py dashboard data-prep (reads pipeline outputs, never recomputes model)
 dashboard/                      static, self-contained HTML dashboard — Phase 4 (1/N) + Week in Review tab (spec §3.6)
 tests/verify_phase1.py          Phase 1 exit-gate check
-tests/test_*.py                 44 pytest tests total — hotfix, snapshot, actuals, squad_state, hindsight,
-                                 shrinkage, calibration, bench_weight, backtest_calibration (see tests/)
+tests/test_*.py                 53 pytest tests total — hotfix, snapshot, actuals, squad_state, hindsight,
+                                 shrinkage, calibration, bench_weight, backtest_calibration, xg_blend,
+                                 top40_rank_correlation, backtest_xg_blend (see tests/)
 notebooks/01_profile_research.ipynb   Phase 2 exit-gate deliverable, executed with real outputs baked in
 config.yaml                     every tunable constant — read this before touching any module
 docs/FPL_V2_DESIGN.md           the v2 spec this session mostly implemented — see §4b below
+docs/FPL_V3_PLAN.md             the v3 follow-on spec (multi-source, model bakeoff) — see PROJECT_LOG §11
+docs/DECISION_RULE.md           v3 spec §C5 — pre-registered GW12 champion-selection rule, written before GW2 data exists
 .github/workflows/weekly.yml    scheduled automation — spec §2.0, built, not yet verified against a live run
 ```
 

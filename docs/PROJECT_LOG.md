@@ -650,3 +650,66 @@ this plan was written, so there's no "M0 without shrinkage" left in the
 codebase to nest M1 on top of — same pattern as handoff findings #2/#4
 ("dissolved," not fixed, because the bug's precondition no longer exists).
 5 new tests (`tests/test_xg_blend.py`) — 49 total.
+
+### Phase C1/C2 — top-40 rank correlation (the primary statistical metric)
+
+Plan §C2's own argument: the optimiser never cares about rank quality
+across the full ~600-player pool, only among players actually competing
+for a squad slot — a 0.5pt MAE gain on every £4.0m bench defender changes
+zero decisions; one £12m forward's wrong rank changes the captain. Added
+`fpl.evaluate.backtest.compute_top40_rank_correlation` — Spearman rank
+correlation restricted to the model's own top-40-by-predicted (not
+top-40-by-actual, which would leak the answer into the test set), wired
+into `run_backtest`'s summary as `top40_rank_correlation`, kept alongside
+(not replacing) the existing full-pool `rank_correlation_by_position` per
+§C2 ("global MAE is secondary, reported only for calibration purposes").
+
+Real result, and a genuinely useful one: full-pool rank correlation was
+already reported at 0.90-0.97 by position, but top-40 rank correlation is
+**0.444** for M0 — range restriction (only the top-of-pool players, where
+outcomes are noisiest and closest together) attenuates correlation
+substantially even for a model that ranks the full pool well. This is
+exactly the gap plan §C2 predicted existed and the old metric was hiding.
+
+Also gave `run_backtest`/`predict_points` a `model` param mirroring
+`project.py`'s (plan §B1): `"m0_rules"` (default, writes
+`model_health.json` unchanged — verified byte-diff is exactly the two new
+summary keys) or `"m2_xg"` (writes `model_health_m2_xg.json`, never the
+production file). Ran both: **M2 beats M0 on both metrics in this
+backtest** — top40_rank_correlation 0.471 vs 0.444, overall RMSE 20.663 vs
+20.973. Reported honestly as a single-split, non-live signal, not a result
+to act on (see `docs/DECISION_RULE.md` below) — per the plan's own
+methodology note, minimising backtest loss alone has already been shown
+(the shrinkage.k and xg_blend.k_xg sweeps) to reward degenerate solutions,
+and this is the same retrospective split with the same documented scope
+limits (single split, no fixture adjustment, DEFCON excluded).
+
+**Caught and fixed a real leakage bug while wiring `model="m2_xg"` into
+the backtest**: `xg_blend.apply_xg_blend` internally reloads player
+history via `config["history"]["seasons"]`, and the plain `config`
+`predict_points` receives already includes `TEST_SEASON` (2025-26 is in
+production's own `history.seasons` list) — passing it unmodified would
+train the xG rates partly on the season being predicted. Fixed by passing
+`_train_only_config(config)` into `apply_xg_blend` specifically, same
+pattern `_apply_shrinkage`'s caller already uses for the goal/assist
+rates. Guarded by a new regression test
+(`tests/test_backtest_xg_blend.py`) that monkeypatches
+`apply_xg_blend` and asserts the config it actually receives excludes
+`TEST_SEASON` — this is exactly the leakage class `identity.py`'s
+docstring warns about, caught here before it reached a committed number.
+
+4 new tests (3 `test_top40_rank_correlation.py`, 1
+`test_backtest_xg_blend.py`) — 53 total.
+
+### Phase C5 — pre-registered decision rule
+
+Plan §C5 / decision D4: "write this into the repo before GW2 data
+exists." GW1's own deadline hadn't even passed yet at write time, so this
+is a genuine pre-registration, not a post-hoc rationalisation dressed up
+as one. Wrote `docs/DECISION_RULE.md`: the plan's rule verbatim, dated
+concretely (GW12 review = 2026-11-06, computed from GW1's real deadline
+at the plan's weekly cadence — matches the plan's own "early November
+2026" estimate), current champion recorded as M0, M2's backtest numbers
+listed explicitly as "informational, not part of the rule" with the
+reasoning for why a single retrospective split isn't allowed to move the
+champion before GW12's gameweek-clustered, live-data conditions are met.

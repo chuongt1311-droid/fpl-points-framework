@@ -49,6 +49,7 @@ import yaml
 
 from fpl.project import baseline as baseline_mod
 from fpl.project import identity
+from fpl.project import xg_blend as xg_blend_mod
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 HIST_DIR = Path(__file__).resolve().parents[2] / "data" / "raw" / "history"
@@ -178,7 +179,7 @@ def _apply_shrinkage(
 
 def predict_points(
     rates: pd.DataFrame, tier_priors: pd.DataFrame, position_priors: pd.DataFrame,
-    actuals: pd.DataFrame, test_roster: pd.DataFrame, config: dict,
+    actuals: pd.DataFrame, test_roster: pd.DataFrame, config: dict, model: str = "m0_rules",
 ) -> pd.DataFrame:
     """
     predicted_points_per90, applied to ACTUAL minutes played (see module
@@ -186,6 +187,13 @@ def predict_points(
     save_pts and conceded_pts for GK/DEF (finding #8), and per-channel
     predicted-points columns (predicted_{channel}_pts) alongside the total,
     so compute_channel_calibration can compare them to actuals directly.
+
+    `model` mirrors fpl.project.project.build_player_inputs' param (plan
+    §B1): "m0_rules" (default, unchanged) or "m2_xg" — after shrinkage,
+    _apply_shrinkage's output already has exactly the columns
+    xg_blend.apply_xg_blend needs (id, code, position, price,
+    weighted_minutes, goals_scored_per90, assists_per90), so it's reused
+    directly rather than re-implemented for the backtest.
     """
     goal_mult = config["position_multipliers"]["goals"]
     assist_mult = config["position_multipliers"]["assists_flat"]
@@ -193,6 +201,16 @@ def predict_points(
     rules = config["scoring_rules"]
 
     df = _apply_shrinkage(rates, test_roster, tier_priors, position_priors, config)
+    if model == "m2_xg":
+        # LEAKAGE GUARD: apply_xg_blend internally re-loads player history
+        # via config["history"]["seasons"] — the plain `config` includes
+        # TEST_SEASON (2025-26, production's own seasons list). Must pass
+        # the train-only config here, same as build_training_rates does for
+        # the goal/assist rates, or the xG rates would be trained partly on
+        # the season being predicted.
+        df = xg_blend_mod.apply_xg_blend(df, _train_only_config(config))
+    elif model != "m0_rules":
+        raise ValueError(f"Unknown model {model!r} — expected 'm0_rules' or 'm2_xg'")
     df = df.merge(actuals, on="id", how="inner")  # only players with real 2025-26 minutes
     df = df[df["actual_minutes"] > 0]
 
@@ -261,6 +279,34 @@ def compute_rmse_by_position(predictions: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def compute_top40_rank_correlation(predictions: pd.DataFrame, n: int = 40) -> float:
+    """
+    v3 plan §C1/§C2: the PRIMARY statistical metric, not full-pool MAE/RMSE
+    (compute_rmse_by_position above — kept, but secondary, per §C2: "Global
+    MAE is secondary and reported only for calibration purposes"). The
+    optimiser doesn't care about rank quality across the full ~600-player
+    pool — it only ever decides among the players actually competing for a
+    squad slot. Plan's own worked example: improving every £4.0m bench
+    defender's projection by 0.5 pts moves global MAE and changes zero
+    decisions; getting one £12m forward's rank wrong changes the captain.
+
+    "Top 40" = the model's OWN top 40 by predicted_points — the pool it
+    would actually put in front of the optimiser — not top-40-by-actual
+    (which would leak the answer into the definition of the test set).
+    Spearman = Pearson on ranks, matching compute_rmse_by_position's
+    existing rank_correlation_by_position (no new scipy dependency).
+
+    NOT gameweek-clustered (plan §C1's stated requirement for the LIVE
+    decision-scorecard SEs): this backtest predicts one SEASON-cumulative
+    total per player from a single train/test split, not per-gameweek
+    observations, so there is no gameweek axis to cluster on here. Real
+    gameweek-clustered SEs apply once fpl/evaluate/hindsight.py has
+    accumulated real per-GW predictions (plan §C3) — see docs/PROJECT_LOG.md.
+    """
+    top = predictions.nlargest(n, "predicted_points")
+    return float(top["predicted_points"].rank().corr(top["actual_points"].rank()))
+
+
 def compute_channel_calibration(predictions: pd.DataFrame) -> dict:
     """
     Spec §4.2: per-(position, channel) multiplier = sum(actual) / sum(predicted),
@@ -290,14 +336,24 @@ def compute_channel_calibration(predictions: pd.DataFrame) -> dict:
     return out
 
 
-def run_backtest(config: Optional[dict] = None) -> dict:
+def run_backtest(config: Optional[dict] = None, model: str = "m0_rules") -> dict:
+    """
+    `model` — see predict_points. "m0_rules" (default) writes to
+    data/output/model_health.json, the SAME path as always — the file
+    project.py's load_calibration_factors reads, so this must stay
+    unaffected by model=="m2_xg" ever having been called. Any other model
+    writes to data/output/model_health_{model}.json instead (plan §B1: each
+    model gets its own artefact, never a shared file) — a bakeoff
+    comparison reads both, production only ever reads the m0_rules one.
+    """
     config = config or load_config()
     test_roster = load_test_roster()
     rates, tier_priors, position_priors = build_training_rates(test_roster, config)
     actuals = load_actuals()
-    predictions = predict_points(rates, tier_priors, position_priors, actuals, test_roster, config)
+    predictions = predict_points(rates, tier_priors, position_priors, actuals, test_roster, config, model=model)
     rmse_by_position = compute_rmse_by_position(predictions)
     calibration_factors = compute_channel_calibration(predictions)
+    top40_rank_correlation = compute_top40_rank_correlation(predictions)
 
     n_from_prior = int((predictions["historical_minutes"].isna()
                          | (predictions["historical_minutes"] < config["new_signing"]["min_historical_minutes"])).sum())
@@ -310,17 +366,23 @@ def run_backtest(config: Optional[dict] = None) -> dict:
         .apply(lambda g: g["predicted_points"].rank().corr(g["actual_points"].rank()), include_groups=False)
     )
     summary = {
+        "model": model,
         "test_season": TEST_SEASON,
         "train_seasons": TRAIN_SEASONS,
         "n_players_tested": int(len(predictions)),
         "n_players_from_tier_prior": n_from_prior,
         "scope_note": "Single retrospective split, actual minutes used, no fixture adjustment, DEFCON excluded (no leak-free training season exists) — see module docstring.",
+        # PRIMARY metric per plan §C1/§C2 — see compute_top40_rank_correlation's
+        # docstring for why this, not overall_rmse, is what a model change
+        # should be judged on.
+        "top40_rank_correlation": round(top40_rank_correlation, 4),
         "rmse_by_position": rmse_by_position.set_index("position").to_dict(orient="index"),
         "overall_rmse": float(np.sqrt(((predictions["predicted_points"] - predictions["actual_points"]) ** 2).mean())),
         "rank_correlation_by_position": rank_corr_by_position.round(3).to_dict(),
         "calibration_factors": calibration_factors,
     }
-    (OUTPUT_DIR / "model_health.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    out_name = "model_health.json" if model == "m0_rules" else f"model_health_{model}.json"
+    (OUTPUT_DIR / out_name).write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return {"predictions": predictions, "rmse_by_position": rmse_by_position, "summary": summary}
 
 
