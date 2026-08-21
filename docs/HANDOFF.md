@@ -1,7 +1,18 @@
 # Handoff — FPL Points-Maximization Framework
 
 **Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A0/A1/A2/A5
-+ B2 + C1/C2 + C5 + D done):**
++ B2/B3/B5 + C1/C2 + C5 + D + E done):**
+**Phase E (live Streamlit decision layer) is built and verified
+end-to-end via the browser tool** — `dashboard/app.py` +
+`dashboard/live_data.py`. Run it:
+`.venv\Scripts\python.exe -m streamlit run dashboard/app.py`. Real bug
+caught and fixed while building it: `force_formation` only reached the
+optimiser's stage-1 (discarded) XI variables, not stage 2's actual
+returned XI — see PROJECT_LOG §11's Phase E section for the full story.
+`optimise_squad` gained 6 new what-if params (lock/ban/budget/formation/
+chip) as a prerequisite, all backward-compatible (frozen weekly path
+unaffected, verified). 17 new tests across the two commits — 103 passing.
+
 **Real finding — read before touching Understat again**:
 understat.com's robots.txt disallows all automated access. The user
 explicitly authorized proceeding for this private tool anyway — see
@@ -115,6 +126,8 @@ fpl/collect/sources/understat.py v3 spec §A2 -- Understat adapter (see robots.t
 fpl/project/identity_multi.py   v3 spec §A5 -- cross-source identity bridge (FPL code <-> Understat id)
 fpl/project/understat_blend.py  v3 spec §B3 -- model M3, npxG blend (does NOT currently beat M2 -- see PROJECT_LOG §11)
 fpl/evaluate/ensemble.py        v3 spec §B5 -- model M5, out-of-sample weighted blend (also does NOT beat M2 alone -- see PROJECT_LOG §11)
+dashboard/app.py                v3 spec §E -- live Streamlit decision layer (what-if squad exploration)
+dashboard/live_data.py          v3 spec §E -- FROZEN-artefact loading for app.py (never recomputes the model)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)

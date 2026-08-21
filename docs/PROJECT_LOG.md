@@ -977,3 +977,76 @@ updated with M5's row and an M4 (Sofascore) placeholder row, both
 honestly marked. None of this changes the champion — per the
 pre-registered rule (plan §C5), only real GW1-11 live data at the GW12
 review can do that.
+
+### Phase E — live Streamlit decision layer
+
+Plan §E1's boundary rule: FROZEN (data pull -> xpts, GitHub Actions,
+committed artefacts) vs LIVE (xpts vector + constraints -> MILP -> squad/
+XI/captain/K-best, Streamlit, re-solved on demand, never persisted as
+canonical). Built as two files: `dashboard/live_data.py` (all file I/O —
+reads only already-committed parquet/JSON, never calls
+`project_gameweeks`/`build_players`) and `dashboard/app.py` (the UI,
+imports only `fpl.decide.kbest`/`fpl.decide.optimiser` — the pure,
+offline MILP layer plan §E1 says may be re-solved freely).
+
+**Prerequisite work, done first**: `optimise_squad` didn't have any of
+plan §E2's what-if knobs (lock/ban/budget/formation/chip) — added them as
+six new optional params (previous commit, `cc8aff7`), all defaulting to
+None so the frozen weekly path stays byte-identical. **Caught a real bug
+while wiring the UI to them**: `force_formation` only reached stage 1's
+XI-shaping variables, which `optimise_squad`'s OWN docstring says are
+discarded — the starting XI actually returned always comes from stage 2
+(`pick_xi_and_captain`), which never saw the constraint, so a forced
+3-5-2 request silently produced whatever formation stage 2 preferred on
+its own. Fixed by threading `force_formation` into `pick_xi_and_captain`
+too (and `kbest.find_k_best_xis`, for K-best-under-a-forced-formation).
+Caught by a test that failed against the pre-fix code
+(`test_force_formation_produces_the_exact_requested_starting_shape`).
+
+**E2 controls implemented**: lock/ban players, ban clubs, budget
+override, force formation, model selector (reads whichever of M0/M2/M3
+has a committed projection for the selected gameweek —
+`live_data.available_models`), Bench Boost chip (swaps the bench term's
+objective weight from the tie-breaking epsilon to full value). Free Hit
+is present in the UI but an honest no-op: plan §E2 describes it as "drop
+the transfer-cost term," and `fpl/decide/transfers.py` (which would
+compute that term) doesn't exist — the UI says so directly rather than
+silently doing nothing under a name that implies otherwise.
+
+**E3 reproducibility guard**: every live solve is banner-labelled
+EXPLORATORY; the canonical `gw{n}_recommendations.json` is always shown
+pinned above it, unmodifiable; every live solve appends to
+`data/scratch/live_solves.jsonl` (constraints, model, top result,
+timestamp — gitignored, ephemeral, never committed); nothing on this page
+writes to `data/state/` — committing a squad stays a separate, explicit
+action this app deliberately does not implement.
+
+**E4 performance**: `st.cache_data` on the player-inputs load, keyed by a
+real content hash of the projection parquet + config.yaml (not just
+mtime, so an identical redeploy doesn't needlessly bust the cache but a
+real change always does); an explicit Solve button (nothing re-solves on
+slider drag).
+
+**Verified end-to-end via the browser tool, not just unit tests**:
+launched the real app (`streamlit run dashboard/app.py`), clicked Solve
+with no constraints — got 3 K-best squads matching the CLI's own numbers
+exactly (223.80 / 221.56 / 220.48 weighted xPts, same as
+`kbest.find_k_best_squads` run directly), same captain/vice as the
+canonical recommendation, frontier-spread note rendered correctly ("top 3
+squads within 0.07 pts... no strong preference"), and confirmed
+`data/scratch/live_solves.jsonl` was written with the exact constraint
+set and top squad — matching `data/state/squad_gw1.json` exactly. No
+server errors in the Streamlit process log.
+
+8 new tests (`tests/test_live_data.py`, the pure data-loading logic — no
+Streamlit runtime dependency) + the 9 optimiser what-if tests from the
+prerequisite commit — 103 passing total.
+
+**Not done**: `st.cache_data` on the K-best SOLVE itself (only the xpts
+vector load is cached — re-solving on every Solve click is intentional
+per §E4's "explicit Solve button," so this isn't a gap, just noting the
+scope); streaming K-best results as each one lands rather than waiting
+for all of them (plan §E4 mentions this — `find_k_best_squads` runs all
+solves before returning, a real follow-up for a K as large as 8-10);
+Free Hit's actual transfer-cost-term removal (blocked on
+`fpl/decide/transfers.py` not existing, same as noted above).

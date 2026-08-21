@@ -15,3 +15,9 @@ venv/
 # keep them out of git. Processed/projections/output ARE committed (plan §2,
 # §8: the dashboard reads committed artefacts, never recomputes).
 data/raw/
+
+# v3 plan §E3: live Streamlit solve log — exploratory, per-user, local
+# scratch. Never a canonical artefact; the pinned recommendation the log
+# is graded against is data/output/gw{n}_recommendations.json, which IS
+# committed.
+data/scratch/

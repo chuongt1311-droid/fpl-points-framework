@@ -1,6 +1,28 @@
-# Dashboard (Phase 4)
+# Dashboard (Phase 4) + Live Decision Layer (v3 plan §E)
 
-## What this is
+## Two apps in this directory, two different jobs
+
+- `index.html` (below) — the static, point-in-time "This Week" snapshot.
+  Read-only, offline, no server.
+- `app.py` — the LIVE decision layer (v3 plan §E), added once the
+  condition this file itself flagged ("if Phase 5 automation wants live
+  interactivity... that's the point to reconsider Streamlit") was met.
+  What-if squad exploration (lock/ban/budget/formation/chip scenarios,
+  K-best alternatives) against an already-committed, FROZEN projection —
+  never recomputes the model, never persists a live solve as your
+  official squad. Run it:
+
+  ```powershell
+  & ".venv\Scripts\python.exe" -m streamlit run dashboard/app.py
+  ```
+
+  See `app.py`'s and `live_data.py`'s module docstrings for the full
+  FROZEN/LIVE boundary rule (plan §E1) and the reproducibility guard
+  (plan §E3 — EXPLORATORY labelling, the canonical recommendation always
+  pinned alongside, every live solve logged to
+  `data/scratch/live_solves.jsonl`, never written to `data/state/`).
+
+## What the static dashboard (`index.html`) is
 
 A static, self-contained HTML dashboard (`index.html`) implementing the 5
 views from `docs/FPL_EXECUTION_PLAN.md` §7 — This Week, Player Explorer,
