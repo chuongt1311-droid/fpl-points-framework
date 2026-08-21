@@ -76,6 +76,7 @@ anything from it before GW12 is exactly the trap plan §C3 names.
 |---|---|---|
 | M0 `rules_v1` | **Champion** | 0.444 |
 | M2 `xg_blend` | Built, not live-evaluated | 0.471 (also better overall RMSE: 20.663 vs 20.973) |
+| M3 `understat` | Built, **does not currently beat M2** | 0.322-0.459 across a k_npxg sweep 50-10000 — worse than M2 at every value tested. Not promoted over M2 as the lead challenger. See docs/PROJECT_LOG.md for the full sweep and the honest analysis of why (plausibly: blending an already-blended M2 rate a second time dilutes rather than sharpens, or 2+ year-old Understat npxG is a noisier predictor of a different season than FPL's own more-current xG — the same "stale personal rate" effect already documented for shrinkage.k). |
 
 M2's backtest numbers are directionally favourable but this is a single
 retrospective split against a different season (plan's own documented

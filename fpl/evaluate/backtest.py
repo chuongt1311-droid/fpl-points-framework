@@ -49,6 +49,7 @@ import yaml
 
 from fpl.project import baseline as baseline_mod
 from fpl.project import identity
+from fpl.project import understat_blend as understat_blend_mod
 from fpl.project import xg_blend as xg_blend_mod
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
@@ -189,11 +190,12 @@ def predict_points(
     so compute_channel_calibration can compare them to actuals directly.
 
     `model` mirrors fpl.project.project.build_player_inputs' param (plan
-    §B1): "m0_rules" (default, unchanged) or "m2_xg" — after shrinkage,
-    _apply_shrinkage's output already has exactly the columns
-    xg_blend.apply_xg_blend needs (id, code, position, price,
-    weighted_minutes, goals_scored_per90, assists_per90), so it's reused
-    directly rather than re-implemented for the backtest.
+    §B1): "m0_rules" (default, unchanged), "m2_xg", or "m3_understat"
+    (nests on m2_xg) — after shrinkage, _apply_shrinkage's output already
+    has exactly the columns xg_blend.apply_xg_blend /
+    understat_blend.apply_understat_blend need (id, code, position, price,
+    weighted_minutes, goals_scored_per90, assists_per90), so both are
+    reused directly rather than re-implemented for the backtest.
     """
     goal_mult = config["position_multipliers"]["goals"]
     assist_mult = config["position_multipliers"]["assists_flat"]
@@ -201,15 +203,23 @@ def predict_points(
     rules = config["scoring_rules"]
 
     df = _apply_shrinkage(rates, test_roster, tier_priors, position_priors, config)
-    if model == "m2_xg":
-        # LEAKAGE GUARD: apply_xg_blend internally re-loads player history
-        # via config["history"]["seasons"] — the plain `config` includes
-        # TEST_SEASON (2025-26, production's own seasons list). Must pass
-        # the train-only config here, same as build_training_rates does for
-        # the goal/assist rates, or the xG rates would be trained partly on
-        # the season being predicted.
+    if model in ("m2_xg", "m3_understat"):
+        # LEAKAGE GUARD: apply_xg_blend/apply_understat_blend internally
+        # re-load history via config["history"]["seasons"] — the plain
+        # `config` includes TEST_SEASON (2025-26, production's own seasons
+        # list). Must pass the train-only config here, same as
+        # build_training_rates does for the goal/assist rates, or the xG/
+        # npxG rates would be trained partly on the season being predicted.
         df = xg_blend_mod.apply_xg_blend(df, _train_only_config(config))
-    elif model != "m0_rules":
+    if model == "m3_understat":
+        # M3 nests on M2 (plan §B1) — same train-only-config guard applies
+        # to the npxG blend. player_id_map is 2025-26-built (see
+        # understat_blend.py) but joins on the STABLE fpl_code/understat_id
+        # bridge, so reusing it here for the historical train seasons is
+        # legitimate identity-wise; only the RATE TRAINING WINDOW (history
+        # seasons) needs restricting, not the map itself.
+        df = understat_blend_mod.apply_understat_blend(df, _train_only_config(config))
+    elif model not in ("m0_rules", "m2_xg"):
         raise ValueError(f"Unknown model {model!r} — expected 'm0_rules' or 'm2_xg'")
     df = df.merge(actuals, on="id", how="inner")  # only players with real 2025-26 minutes
     df = df[df["actual_minutes"] > 0]

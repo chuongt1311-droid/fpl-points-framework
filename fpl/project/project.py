@@ -46,6 +46,7 @@ from fpl.project import baseline as baseline_mod
 from fpl.project import defcon as defcon_mod
 from fpl.project import fixtures as fixtures_mod
 from fpl.project import minutes as minutes_mod
+from fpl.project import understat_blend as understat_blend_mod
 from fpl.project import xg_blend as xg_blend_mod
 from fpl.transform import build_players
 
@@ -86,9 +87,13 @@ def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:
       "m0_rules" (default) — the live production rates, unchanged.
       "m2_xg"    — M0's goals_scored_per90/assists_per90 replaced by the
                    xG-blended rate (fpl/project/xg_blend.py, plan §B2).
-                   NOT wired into the default path — must be requested
-                   explicitly, so M0's output is provably unaffected by
-                   this model existing.
+      "m3_understat" — M2's rate, further blended toward Understat's
+                   npxG for players with a real cross-source identity
+                   match (fpl/project/understat_blend.py, plan §B3).
+                   Nested per plan §B1: M3 = M2 + one new component.
+      Neither is wired into the default path — must be requested
+      explicitly, so M0's output is provably unaffected by either
+      existing.
     """
     players = build_players.build_players()
     base = baseline_mod.build_baseline(players, config)
@@ -116,8 +121,11 @@ def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:
 
     if model == "m2_xg":
         out = xg_blend_mod.apply_xg_blend(out, config)
+    elif model == "m3_understat":
+        out = xg_blend_mod.apply_xg_blend(out, config)
+        out = understat_blend_mod.apply_understat_blend(out, config)
     elif model != "m0_rules":
-        raise ValueError(f"Unknown model {model!r} — expected 'm0_rules' or 'm2_xg'")
+        raise ValueError(f"Unknown model {model!r} — expected 'm0_rules', 'm2_xg' or 'm3_understat'")
 
     return out
 

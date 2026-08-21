@@ -18,8 +18,15 @@ identity bridge). Real result on 2025-26 data: 82.68% coverage (444/537
 matched), below the plan's 90% target, honestly reported as such, written
 to `data/reference/player_id_map_2025-26.csv` — NOT a live 2026-27 map,
 Understat has no 2026-27 data yet (same GW1-not-finished calendar
-blocker already documented elsewhere in this file). Not done: wiring the
-map into a real M3 model, SourceHealth into model_health.json.
+blocker already documented elsewhere in this file).
+
+**M3 (`fpl/project/understat_blend.py`, plan §B3) built and backtest-fit
+— a genuine NEGATIVE result, reported honestly, not suppressed.** M3
+does not beat M2 at any tested k_npxg (best case 0.459 top-40 rank corr
+vs M2's 0.471). Kept in the codebase as a working, tested model — just
+not promoted as the lead challenger. See PROJECT_LOG §11 for the full
+sweep and the two candidate explanations. Not done: `SourceHealth` into
+`model_health.json`.
 
 `fpl/decide/kbest.py` (plan §D1-D3) adds K-best-with-diversity: alternative
 15-man squads (`find_k_best_squads`, no-good cuts, `d=3` required per plan
@@ -100,6 +107,7 @@ fpl/decide/kbest.py             v3 spec §D1-D3 -- K-best with diversity, fronti
 fpl/collect/sources/base.py     v3 spec §A0 -- SourceAdapter protocol + SourceHealth
 fpl/collect/sources/understat.py v3 spec §A2 -- Understat adapter (see robots.txt note above)
 fpl/project/identity_multi.py   v3 spec §A5 -- cross-source identity bridge (FPL code <-> Understat id)
+fpl/project/understat_blend.py  v3 spec §B3 -- model M3, npxG blend (does NOT currently beat M2 -- see PROJECT_LOG §11)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)

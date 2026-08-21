@@ -883,3 +883,52 @@ written into `model_health.json` (A0 rule 3) — a real follow-up.
 
 21 new tests (4 `test_understat_adapter.py` non-network + 1 network,
 12 `test_identity_multi.py`) — 76 total (77 including the network test).
+
+### Phase B3 — M3 (Understat blend), a real negative result
+
+Plan's nesting table (§B1): M3 = M2 + "npxG, xGChain, set-piece/penalty
+split, shot quality." Built `fpl/project/understat_blend.py`: for players
+with a real cross-source identity match (via the 2025-26
+`player_id_map`, whose `understat_id` is verified stable across Understat
+seasons — same mechanism as FPL's own `code`), blends M2's already-
+blended goal rate a second time toward a recency-weighted **npxG90**
+(non-penalty xG, fetched and cached for all 3 training/test seasons —
+2023, 2024, 2025 — via `UnderstatAdapter`), weight `v3 = k_npxg / (m +
+k_npxg)` using the Understat-specific weighted-minutes sample (not FPL's),
+same functional shape as M2's own `v`. Unmatched players pass through
+with M2's rate unchanged. Wired into `project.py`/`backtest.py` as
+`model="m3_understat"`, same non-invasive pattern as M2 (own projections
+path, leakage-guarded train-only config for the backtest). 4 new tests
+(`tests/test_understat_blend.py`).
+
+**Real result, and an honest one**: swept `k_npxg` the same way as
+`shrinkage.k` and `xg_blend.k_xg` — **M3 does NOT beat M2 at any tested
+value.** Best case (k_npxg=50, nearly full npxG trust) reaches
+top40_rank_correlation=0.459 / RMSE=20.773, still short of M2's 0.471 /
+20.663; every other tested value (200-10000) is meaningfully worse
+(down to 0.30-0.32). Diagnosed, not just reported: real npxG values
+looked sane on inspection (301 real players bridged in the train-only
+pass, rates like Saka npxG90=0.393 vs personal 0.406 — plausible), so
+this isn't a wiring bug. Two candidate explanations, both consistent with
+this project's own prior findings, neither confirmed: (1) blending an
+ALREADY-blended M2 rate a second time may just dilute signal rather than
+sharpen it — M3's blend has no way to "unmix" M2's own xG contribution
+before adding npxG on top; (2) 2+ year-old Understat data (the TRAIN
+seasons, 2023-24/2024-25) predicting a different season's actual goals
+may be a genuinely noisier signal than FPL's own more-current xG — the
+exact "stale personal rate" effect already documented in the
+shrinkage.k sweep reasoning (2026-08-20, same file, §10).
+
+**Kept k_npxg=1500** (matching k_xg/shrinkage.k) for architectural
+consistency, NOT because it won the sweep — nothing did. **M3 is not
+promoted as the lead challenger over M2** — recorded honestly in
+`docs/DECISION_RULE.md`'s informational table, per the project's own
+established culture (PROJECT_LOG §10: "if a challenger doesn't clearly
+win, that's a valid, reportable outcome, not a failure of the
+experiment"). This is exactly what plan §A3's recorded Sofascore
+prediction anticipates for a composite/derived signal that doesn't add
+information beyond what's already captured — plausibly the same
+dynamic here, one layer earlier than the plan expected it.
+
+4 new tests (`tests/test_understat_blend.py`) — 80 passing by default
+(81 including the network test).

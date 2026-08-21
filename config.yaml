@@ -105,6 +105,14 @@ xg_blend:
   # -- M2 is a bakeoff candidate, not the champion; see plan §C5.
   k_xg: 1500
 
+# v3 plan §B3 (model M3): further blends M2's rate toward Understat's
+# npxG for players with a real cross-source identity match (plan §A5) --
+# same functional shape as xg_blend's v, a SEPARATE k since this is a
+# different blend (M2-rate-vs-npxG, not G90-vs-xG90). See
+# docs/PROJECT_LOG.md for the fitting sweep.
+understat_blend:
+  k_npxg: 1500
+
 transfers:
   free_per_gw: 1
   max_bank: 5
