@@ -51,8 +51,46 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _position_blank_rate(pool: pd.DataFrame) -> dict:
+    """
+    v3 plan §D4: bench value should be weighted by P(a starter in that
+    position blanks) x bench_player_xpts, not a flat epsilon regardless of
+    position — a bench GK covers a rarer event (GKs blank far less often)
+    than a bench DEF/MID/FWD, so flat weighting over-values GK cover and
+    under-values outfield cover relative to real autosub odds.
+
+    Proxy (not a full model — no per-starter blank-probability estimator
+    exists yet): for each position, 1 - the average minutes_factor (P(60+
+    mins), see fpl/project/minutes.py) among that position's ABOVE-MEDIAN-
+    PRICE players in the pool — a stand-in for "the players actually likely
+    to start," avoiding the endogeneity of using the LP's own start[] result
+    (which doesn't exist yet when this constant needs to be computed) or
+    depending on a specific squad's chosen starters.
+
+    Degrades gracefully to 1.0 for every position (equivalent to the old
+    flat epsilon) if `minutes_factor` isn't present in the pool — e.g. the
+    synthetic pools tests/test_bench_weight.py uses, which test the
+    tie-breaking mechanism itself, not this position-specific refinement.
+    """
+    if "minutes_factor" not in pool.columns:
+        return {"GK": 1.0, "DEF": 1.0, "MID": 1.0, "FWD": 1.0}
+    rates = {}
+    for pos in ["GK", "DEF", "MID", "FWD"]:
+        pos_pool = pool[pool["position"] == pos]
+        if pos_pool.empty:
+            rates[pos] = 1.0
+            continue
+        likely_starters = pos_pool[pos_pool["price"] >= pos_pool["price"].median()]
+        if likely_starters.empty or likely_starters["minutes_factor"].isna().all():
+            rates[pos] = 1.0
+            continue
+        rates[pos] = float(1.0 - likely_starters["minutes_factor"].mean())
+    return rates
+
+
 def optimise_squad(
     players: pd.DataFrame, config: Optional[dict] = None, apply_availability_filters: bool = True,
+    extra_no_good_cuts: Optional[list] = None,
 ) -> dict:
     """
     players: one row per player with id, web_name, position, price, team,
@@ -68,6 +106,12 @@ def optimise_squad(
     REALITY, a player incorrectly flagged unavailable pre-GW who then
     played and hauled must still be eligible for that benchmark, or squad
     regret would be systematically understated.
+
+    extra_no_good_cuts: v3 plan §D1 — list of previously-found squad id
+    lists. Each adds Σ_{i in S} squad[i] <= |S| - diversity_d, forbidding
+    the new solution from matching a prior one in diversity_d-or-more
+    players. None (default) = the single best squad, unchanged behaviour.
+    See fpl/decide/kbest.py for the iterative K-best caller.
 
     Returns {"squad": [...15 ids...], "starting_xi": [...11...],
     "captain": id, "vice_captain": id, "total_cost": float,
@@ -107,23 +151,36 @@ def optimise_squad(
     start = pulp.LpVariable.dicts("start", ids, cat="Binary")
     captain = pulp.LpVariable.dicts("captain", ids, cat="Binary")
 
-    # Spec §4.4: a small epsilon weight on every squad member (starters
-    # included, so this ADDS to their existing full weight rather than
-    # replacing it) breaks ties the solver was previously indifferent to —
-    # equally-priced eligible bench players used to be arbitrary — and
-    # approximates real autosub value. Sized (config.optimiser.
-    # bench_weight_epsilon, default near-zero) to never outbid a genuine
-    # starting-XI improvement: it only matters when two candidate squads'
-    # STARTING xpts are otherwise tied, since a real starter-xpts
-    # difference of even a fraction of a point dwarfs epsilon * a bench
-    # player's xpts. Doesn't touch stage2's pick_xi_and_captain at all —
-    # that's a separate LP on next_gw_xpts alone, so this can't leak into
-    # which 11 actually start.
+    # Spec §4.4 / v3 plan §D4: a small epsilon weight, applied to (squad[i]
+    # - start[i]) i.e. ONLY the bench portion (not double-counting starters,
+    # who already get full weight via start[i]*xpts[i] below) — breaks ties
+    # the solver was previously indifferent to (equally-priced eligible
+    # bench players used to be arbitrary) and approximates real autosub
+    # value. Scaled by _position_blank_rate(pool)[position] (v3 plan §D4:
+    # "weight bench slots by P(a starter in that position blanks) x
+    # bench_player_xpts" — a bench GK covers a rarer event than a bench
+    # DEF/MID/FWD, so a flat weight over-values GK cover) — degrades to a
+    # flat 1.0 multiplier (the old behaviour) when minutes_factor isn't in
+    # the pool. Sized to never outbid a genuine starting-XI improvement: a
+    # real starter-xpts difference of even a fraction of a point dwarfs
+    # epsilon * blank_rate * a bench player's xpts. Doesn't touch stage2's
+    # pick_xi_and_captain at all — that's a separate LP on next_gw_xpts
+    # alone, so this can't leak into which 11 actually start.
+    blank_rate = _position_blank_rate(pool)
+    bench_value = {i: blank_rate[position[i]] * xpts[i] for i in ids}
     prob += (
         pulp.lpSum(start[i] * xpts[i] for i in ids)
         + pulp.lpSum(captain[i] * xpts[i] for i in ids)
-        + bench_weight_epsilon * pulp.lpSum(squad[i] * xpts[i] for i in ids)
+        + bench_weight_epsilon * pulp.lpSum((squad[i] - start[i]) * bench_value[i] for i in ids)
     ), "total_expected_points"
+
+    # v3 plan §D1: no-good cuts excluding each previously-found squad, so
+    # repeated calls (fpl/decide/kbest.py) walk down the K-best-with-
+    # diversity frontier instead of the solver just returning the same
+    # optimum again. diversity_d=1 gives pure K-best (next-best legal
+    # squad, however similar); diversity_d>=2 forces genuine variety.
+    for cut_ids, diversity_d in (extra_no_good_cuts or []):
+        prob += pulp.lpSum(squad[i] for i in cut_ids if i in squad) <= len(cut_ids) - diversity_d
 
     # Squad composition
     prob += pulp.lpSum(squad[i] for i in ids) == rules["total"]
@@ -159,6 +216,19 @@ def optimise_squad(
     if pulp.LpStatus[prob.status] != "Optimal":
         raise RuntimeError(f"Optimiser did not find an optimal solution: {pulp.LpStatus[prob.status]}")
 
+    # The ACTUAL thing being maximised — starting-XI xpts + captain xpts +
+    # epsilon*blank_rate*bench xpts — which is NOT the same as
+    # horizon_weighted_xpts (the raw sum of all 15 squad members' xpts,
+    # reported below for display only). A K-best/diversity caller
+    # (fpl/decide/kbest.py) MUST rank alternatives on this value: ranking
+    # on the raw 15-man sum instead is not monotonic with what the solver
+    # actually optimised — a later, more-constrained solve can easily have
+    # a HIGHER raw sum (a stronger bench, weaker starters) while being a
+    # genuinely worse squad by the objective that picked it. Caught exactly
+    # this while building kbest.py (frontier_spread came out positive for
+    # a "later" squad — see docs/PROJECT_LOG.md).
+    stage1_objective = pulp.value(prob.objective)
+
     squad_ids = [i for i in ids if squad[i].value() == 1]
 
     # STAGE 1 produced the 15. Its XI/captain variables existed only to shape
@@ -190,6 +260,10 @@ def optimise_squad(
         # Two separate numbers, never one ambiguous "expected_points":
         "next_gw_expected_points": sum(next_gw[i] for i in starting_ids) + next_gw[captain_id],
         "horizon_weighted_xpts": sum(xpts[i] for i in squad_ids),
+        # What the stage-1 MILP actually maximised — see stage1_objective's
+        # definition above. K-best/diversity ranking must use THIS, not
+        # horizon_weighted_xpts.
+        "stage1_objective": stage1_objective,
         # What stage 2 bought, in points: the same XI decision made on the
         # horizon number vs on the actual gameweek. 0.0 means both agreed.
         "xi_correction_gain": (

@@ -713,3 +713,77 @@ at the plan's weekly cadence — matches the plan's own "early November
 listed explicitly as "informational, not part of the rule" with the
 reasoning for why a single retrospective split isn't allowed to move the
 champion before GW12's gameweek-clustered, live-data conditions are met.
+
+### Phase D — K-best with diversity + bench weighting refinement
+
+Plan §D1/D2/D3: alternatives via no-good cuts (`Σ_{i∈S} x_i <= |S| - d`),
+not pure K-best (`d=1` gives fifteen near-identical squads differing only
+in the cheapest bench filler — the plan's own worked example). Built
+`fpl/decide/kbest.py`:
+
+- `find_k_best_squads` — full 15-man alternatives, `d=3` required (plan
+  §D2). Iteratively calls `optimiser.optimise_squad` with an accumulating
+  list of no-good cuts (`optimise_squad` gained an `extra_no_good_cuts`
+  param for this). Stops early (returns fewer than k) rather than
+  fabricating a result once the pool has no more sufficiently-different
+  legal squads — verified with a zero-slack synthetic pool (exactly 15
+  eligible players, only one legal squad exists at all).
+- `find_k_best_xis` — alternative XIs from a FIXED 15, pure K-best `d=1`
+  (plan §D2 — the pool is only 15 players, so more diversity would run out
+  fast). Reuses `pick_xi_and_captain`'s exact LP structure with no-good
+  cuts on `start[]` added between solves.
+- `compute_cross_model_agreement` (plan §D3: "if M0's top squad ranks #2
+  under M2 ... that convergence is worth more than any single model's
+  confidence") — for each model's #1 squad, looks it up (as an exact id
+  set) inside every other model's own K-best frontier, `None` if not
+  found there (documented explicitly as NOT necessarily disagreement — a
+  squad differing by only 1-2 players from another model's own #1 can
+  still fail to appear as an EXACT match inside that model's `d=3`-spaced
+  frontier).
+
+**Real bug caught while building this, before it reached a committed
+number**: the first `frontier_spread` implementation ranked squads by
+`horizon_weighted_xpts` (the raw sum of all 15 squad members' xpts) —
+non-monotonic with what the stage-1 MILP actually optimises (starting-XI
+xpts + captain + a small bench term, NOT the full 15-man sum). Concretely:
+squad #5 in a real run showed `frontier_spread=+5.16` — HIGHER than squad
+#1, which is mathematically impossible for a more-constrained solve
+UNLESS the ranking metric doesn't match the actual objective. Fixed by
+having `optimise_squad` return `stage1_objective` (`pulp.value(prob.
+objective)` — the real thing being maximised) and ranking on that
+instead; frontier_spread is now verified monotonically non-increasing by
+construction (`tests/test_kbest.py`) and confirmed on real GW1 data: M0's
+top-5 diverse squads span only 223.80 down to a `stage1_objective` spread
+of -0.13 pts — the model has essentially no strong preference among its
+top 5 diverse squads this early in the season, exactly the "report the
+gap, not just squad #2" case plan §D3 describes.
+
+**Cross-model agreement, real result**: M0's and M2's respective top
+squads share 12 of 15 players but neither appears as an exact match in
+the other's own K-best frontier — a genuine, reportable disagreement
+(the 3 differing players are exactly where M2's xG-blended attacking
+rate diverges from M0's shrunk personal rate), not a bug.
+
+**Phase D4 (bench weighting) refinement**: the flat
+`bench_weight_epsilon` (v2, already shipped) broke bench ties but weighted
+every position identically. Added `optimiser._position_blank_rate` — a
+per-position `1 - mean(minutes_factor)` among that position's
+above-median-price players (a "likely starters" proxy, avoiding the
+endogeneity of using the LP's own `start[]` result, which doesn't exist
+yet when this constant is computed) — so a bench GK (rare blank event) is
+weighted differently from a bench DEF/MID/FWD (more common), per plan
+§D4's "weight bench slots by P(a starter in that position blanks) ×
+bench_player_xpts." Degrades to the old flat 1.0 multiplier when
+`minutes_factor` isn't in the pool (keeps `tests/test_bench_weight.py`'s
+synthetic-pool tests passing unmodified). Verified against real GW1 data:
+squad/XI/captain output unchanged (the position-scaled weight still only
+matters for genuine ties, same design constraint as before).
+
+**Not done**: bench-SLOT ordering itself (which specific bench player
+occupies "slot 1" vs "slot 3") — the objective now differentiates bench
+value by POSITION, not yet by an explicit per-slot rank inside the
+objective (would need real per-starter blank-probability estimates and a
+slot-assignment sub-structure in the MILP; flagged as a genuine follow-up,
+not attempted this session given the modelling gap).
+
+8 new tests (`tests/test_kbest.py`) — 61 total.

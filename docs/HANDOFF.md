@@ -1,7 +1,17 @@
 # Handoff — FPL Points-Maximization Framework
 
 **Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A1 + B2 +
-C1/C2 + C5 done):**
+C1/C2 + C5 + D done):**
+`fpl/decide/kbest.py` (plan §D1-D3) adds K-best-with-diversity: alternative
+15-man squads (`find_k_best_squads`, no-good cuts, `d=3` required per plan
+§D2) and alternative XIs from a fixed 15 (`find_k_best_xis`, `d=1`), plus
+`compute_cross_model_agreement` (plan §D3). **Caught a real bug** while
+building it — `frontier_spread` must be computed on `optimise_squad`'s new
+`stage1_objective` return value, NOT `horizon_weighted_xpts` (the two
+aren't monotonic — see PROJECT_LOG §11 for the concrete case that
+surfaced it). `optimiser.py` also gained a position-scaled bench weight
+(plan §D4 partial — see PROJECT_LOG for what's still not done: explicit
+bench-slot ordering). 61 tests (was 53).
 See `docs/PROJECT_LOG.md` §11 for the full breakdown. GW1 snapshot/squad
 state confirmed captured (3rd real row at 14h-to-deadline); GW1 itself
 confirmed not yet finished via a live pull, so `actuals.py`/`hindsight.py`
@@ -66,7 +76,8 @@ fpl/project/minutes.py          availability gate, minutes_factor(p)
 fpl/project/defcon.py           DEFCON threshold-crossing rate
 fpl/project/xg_blend.py         v3 spec B2 -- model M2, xG/xA blend (opt-in via project_gameweeks(model="m2_xg"))
 fpl/project/project.py          assembles xPts(p,g) for GW+1..GW+5
-fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage, bench weight (spec §4.4)
+fpl/decide/optimiser.py         MILP squad + XI + captain (PuLP), two-stage, bench weight (spec §4.4, v3 §D4)
+fpl/decide/kbest.py             v3 spec §D1-D3 -- K-best with diversity, frontier_spread, cross-model agreement
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)
