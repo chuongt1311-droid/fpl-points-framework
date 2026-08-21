@@ -86,6 +86,7 @@ def find_k_best_squads(
 
 def find_k_best_xis(
     squad_ids: list, next_gw_xpts: dict, position: dict, rules: dict, k: int = 5,
+    force_formation: Optional[dict] = None,
 ) -> list[dict]:
     """
     Alternative starting XIs from a FIXED 15 (plan §D2 — pure K-best,
@@ -101,6 +102,7 @@ def find_k_best_xis(
     since XI/captain are per-gameweek decisions, not the horizon number).
     """
     sx = rules["starting_xi"]
+    force_formation = force_formation or {}
     results = []
     no_good_cuts: list[list] = []
 
@@ -113,9 +115,13 @@ def find_k_best_xis(
 
         prob += pulp.lpSum(start[i] for i in squad_ids) == sx["total"]
         prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "GK") == sx["gk"]
-        prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "DEF") >= sx["min_def"]
-        prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "MID") >= sx["min_mid"]
-        prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "FWD") >= sx["min_fwd"]
+        for pos_key, min_key in [("def", "min_def"), ("mid", "min_mid"), ("fwd", "min_fwd")]:
+            pos = pos_key.upper()
+            count_expr = pulp.lpSum(start[i] for i in squad_ids if position[i] == pos)
+            if pos_key in force_formation:
+                prob += count_expr == force_formation[pos_key]
+            else:
+                prob += count_expr >= sx[min_key]
         prob += pulp.lpSum(cap[i] for i in squad_ids) == 1
         for i in squad_ids:
             prob += cap[i] <= start[i]

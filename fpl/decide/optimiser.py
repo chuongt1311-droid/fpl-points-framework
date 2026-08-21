@@ -91,6 +91,9 @@ def _position_blank_rate(pool: pd.DataFrame) -> dict:
 def optimise_squad(
     players: pd.DataFrame, config: Optional[dict] = None, apply_availability_filters: bool = True,
     extra_no_good_cuts: Optional[list] = None,
+    locked_ids: Optional[list] = None, banned_ids: Optional[list] = None,
+    banned_clubs: Optional[list] = None, budget_override: Optional[float] = None,
+    force_formation: Optional[dict] = None, chip: Optional[str] = None,
 ) -> dict:
     """
     players: one row per player with id, web_name, position, price, team,
@@ -112,6 +115,37 @@ def optimise_squad(
     the new solution from matching a prior one in diversity_d-or-more
     players. None (default) = the single best squad, unchanged behaviour.
     See fpl/decide/kbest.py for the iterative K-best caller.
+
+    The following six are v3 plan §E2's what-if controls — every one
+    defaults to None/unset, so the WEEKLY (frozen, GitHub-Actions) call
+    path that never passes them is byte-identical to before. Only the
+    LIVE Streamlit layer (dashboard/app.py) passes them, and every live
+    solve is logged (see that file) — the optimiser itself doesn't know
+    or care whether its caller is the frozen pipeline or an exploratory
+    live one; per plan §E1, it's a pure function of its inputs either way.
+
+    locked_ids: player ids that MUST be in the squad (x_i = 1). Raises
+        RuntimeError (infeasible) if locking violates budget/composition —
+        surfaced to the user as "this combination isn't a legal squad",
+        not silently dropped.
+    banned_ids / banned_clubs: player ids / team ids that MUST NOT be in
+        the squad (x_i = 0), e.g. an explicit ban or every player at a
+        club whose fixture just turned into a blank.
+    budget_override: replaces config.squad_rules.budget_tenths/10.0 as the
+        budget constraint's RHS — "what if I had £105m instead of £100m."
+    force_formation: {"def": n, "mid": n, "fwd": n} — tightens the
+        starting-XI position constraints from ">= min" to "== exact",
+        e.g. forcing a 3-5-2. Omit a key to leave that position's
+        constraint as the configured minimum.
+    chip: "bench_boost" swaps the bench term's weight from
+        config.optimiser.bench_weight_epsilon (tie-breaking only) to 1.0
+        (full value) — Bench Boost scores all 15, not just the XI+captain,
+        per plan §E2's chip table. "free_hit" is accepted but currently a
+        no-op: plan §E2 describes it as "drop the transfer-cost term," but
+        fpl/decide/transfers.py (the module that WOULD compute a
+        transfer-cost term) doesn't exist yet, so there is nothing to
+        drop — see dashboard/app.py's own UI note for this honestly
+        surfaced limitation, not hidden as if the chip were fully modelled.
 
     Returns {"squad": [...15 ids...], "starting_xi": [...11...],
     "captain": id, "vice_captain": id, "total_cost": float,
@@ -166,12 +200,18 @@ def optimise_squad(
     # epsilon * blank_rate * a bench player's xpts. Doesn't touch stage2's
     # pick_xi_and_captain at all — that's a separate LP on next_gw_xpts
     # alone, so this can't leak into which 11 actually start.
+    # plan §E2 chip scenario: Bench Boost scores all 15, not just the XI —
+    # swap the bench term's weight from the tie-breaking epsilon to full
+    # value (1.0) so the solver actually optimises total-squad points, not
+    # just starting-XI points with an epsilon-sized bench nudge.
+    effective_bench_weight = 1.0 if chip == "bench_boost" else bench_weight_epsilon
+
     blank_rate = _position_blank_rate(pool)
     bench_value = {i: blank_rate[position[i]] * xpts[i] for i in ids}
     prob += (
         pulp.lpSum(start[i] * xpts[i] for i in ids)
         + pulp.lpSum(captain[i] * xpts[i] for i in ids)
-        + bench_weight_epsilon * pulp.lpSum((squad[i] - start[i]) * bench_value[i] for i in ids)
+        + effective_bench_weight * pulp.lpSum((squad[i] - start[i]) * bench_value[i] for i in ids)
     ), "total_expected_points"
 
     # v3 plan §D1: no-good cuts excluding each previously-found squad, so
@@ -182,6 +222,21 @@ def optimise_squad(
     for cut_ids, diversity_d in (extra_no_good_cuts or []):
         prob += pulp.lpSum(squad[i] for i in cut_ids if i in squad) <= len(cut_ids) - diversity_d
 
+    # plan §E2 what-if controls — locks/bans are checked against the POOL,
+    # not the full unfiltered input, so a lock request for a player already
+    # excluded by apply_availability_filters fails loudly (infeasible) at
+    # solve time rather than being silently ignored.
+    for i in (locked_ids or []):
+        if i in squad:
+            prob += squad[i] == 1
+    for i in (banned_ids or []):
+        if i in squad:
+            prob += squad[i] == 0
+    if banned_clubs:
+        for i in ids:
+            if team[i] in banned_clubs:
+                prob += squad[i] == 0
+
     # Squad composition
     prob += pulp.lpSum(squad[i] for i in ids) == rules["total"]
     for pos, count in [("GK", rules["gk"]), ("DEF", rules["def"]), ("MID", rules["mid"]), ("FWD", rules["fwd"])]:
@@ -190,18 +245,29 @@ def optimise_squad(
     # budget_tenths is in tenths-of-a-million (matches raw now_cost units);
     # `price` here is already converted to real £m by build_players.py, so
     # the budget must be converted the same way: /10, not /100.
-    prob += pulp.lpSum(price[i] * squad[i] for i in ids) <= rules["budget_tenths"] / 10.0
+    # plan §E2: budget_override replaces the RHS wholesale (a live "what if
+    # I had £X instead" question), not an addition to the configured budget.
+    budget_limit = budget_override if budget_override is not None else rules["budget_tenths"] / 10.0
+    prob += pulp.lpSum(price[i] * squad[i] for i in ids) <= budget_limit
 
     for club in set(team.values()):
         prob += pulp.lpSum(squad[i] for i in ids if team[i] == club) <= rules["max_per_club"]
 
-    # Starting XI
+    # Starting XI. plan §E2 force_formation tightens a position's ">= min"
+    # to "== exact" when the caller specifies it (e.g. {"def": 3, "mid": 5,
+    # "fwd": 2} for a 3-5-2) — any position not named keeps its configured
+    # minimum, unchanged from the weekly path's behaviour.
     sx = rules["starting_xi"]
+    force_formation = force_formation or {}
     prob += pulp.lpSum(start[i] for i in ids) == sx["total"]
     prob += pulp.lpSum(start[i] for i in ids if position[i] == "GK") == sx["gk"]
-    prob += pulp.lpSum(start[i] for i in ids if position[i] == "DEF") >= sx["min_def"]
-    prob += pulp.lpSum(start[i] for i in ids if position[i] == "MID") >= sx["min_mid"]
-    prob += pulp.lpSum(start[i] for i in ids if position[i] == "FWD") >= sx["min_fwd"]
+    for pos_key, min_key in [("def", "min_def"), ("mid", "min_mid"), ("fwd", "min_fwd")]:
+        pos = pos_key.upper()
+        count_expr = pulp.lpSum(start[i] for i in ids if position[i] == pos)
+        if pos_key in force_formation:
+            prob += count_expr == force_formation[pos_key]
+        else:
+            prob += count_expr >= sx[min_key]
     for i in ids:
         prob += start[i] <= squad[i]
 
@@ -240,7 +306,7 @@ def optimise_squad(
     # gameweek actually being played.
     next_gw = dict(zip(pool["id"], pool["next_gw_xpts"]))
     starting_ids, captain_id, vice_captain_id = pick_xi_and_captain(
-        squad_ids, next_gw, position, rules
+        squad_ids, next_gw, position, rules, force_formation=force_formation,
     )
 
     result_df = pool[pool["id"].isin(squad_ids)].copy()
@@ -277,7 +343,8 @@ def optimise_squad(
 
 
 def pick_xi_and_captain(
-    squad_ids: list, next_gw_xpts: dict, position: dict, rules: dict
+    squad_ids: list, next_gw_xpts: dict, position: dict, rules: dict,
+    force_formation: Optional[dict] = None,
 ) -> tuple[list, int, int]:
     """
     Given a fixed 15, choose the XI + captain + vice for ONE gameweek.
@@ -292,8 +359,18 @@ def pick_xi_and_captain(
     Kept as its own function rather than inlined because the weekly job,
     Bench Boost evaluation, and the retrospective "best XI of the week"
     all need exactly this operation against different point vectors.
+
+    force_formation: v3 plan §E2 — REAL BUG FOUND AND FIXED while building
+    the live layer: optimise_squad's own force_formation param only
+    tightened stage 1's XI variables, which that function's own docstring
+    says are shaping-only and DISCARDED (the real starting XI always comes
+    from THIS function, stage 2). Passing force_formation here too is
+    what actually makes a forced formation show up in the result the user
+    sees — see optimise_squad's call site below. Same {"def"/"mid"/"fwd":
+    n} shape, same "omit a key to keep the configured minimum" semantics.
     """
     sx = rules["starting_xi"]
+    force_formation = force_formation or {}
     prob = pulp.LpProblem("fpl_xi", pulp.LpMaximize)
     start = pulp.LpVariable.dicts("xi_start", squad_ids, cat="Binary")
     cap = pulp.LpVariable.dicts("xi_captain", squad_ids, cat="Binary")
@@ -302,9 +379,13 @@ def pick_xi_and_captain(
 
     prob += pulp.lpSum(start[i] for i in squad_ids) == sx["total"]
     prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "GK") == sx["gk"]
-    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "DEF") >= sx["min_def"]
-    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "MID") >= sx["min_mid"]
-    prob += pulp.lpSum(start[i] for i in squad_ids if position[i] == "FWD") >= sx["min_fwd"]
+    for pos_key, min_key in [("def", "min_def"), ("mid", "min_mid"), ("fwd", "min_fwd")]:
+        pos = pos_key.upper()
+        count_expr = pulp.lpSum(start[i] for i in squad_ids if position[i] == pos)
+        if pos_key in force_formation:
+            prob += count_expr == force_formation[pos_key]
+        else:
+            prob += count_expr >= sx[min_key]
     prob += pulp.lpSum(cap[i] for i in squad_ids) == 1
     for i in squad_ids:
         prob += cap[i] <= start[i]
