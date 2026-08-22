@@ -308,6 +308,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-chips" id="tab-chips" data-view="chips">Chip Planner</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-health" id="tab-health" data-view="health">Model Health</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-bakeoff" id="tab-bakeoff" data-view="bakeoff">Bakeoff</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-history" id="tab-history" data-view="history">History</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-review" id="tab-review" data-view="review">Week in Review</div>
   </nav>
 
@@ -494,6 +495,42 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
     </div>
   </section>
 
+  <!-- ===================== VIEW: HISTORY (Phase G) ===================== -->
+  <section class="view" id="view-history" role="tabpanel" aria-labelledby="tab-history">
+    <div class="card">
+      <h2>Archive coverage</h2>
+      <div class="hint" style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:14px;">
+        What <span class="mono">data/history/</span> actually holds. The pipeline runs four times a gameweek;
+        an <em>incomplete</em> run is one whose partitions exist but whose <span class="mono">run.json</span>
+        completion marker does not, and it is excluded from every query rather than silently analysed as whole.
+        <em>Reconstructed</em> runs were migrated from the pre-schema crude archive, so some provenance fields
+        are null rather than guessed.
+      </div>
+      <div class="table-wrap">
+        <table id="history-coverage-table">
+          <thead><tr><th>GW</th><th>Complete runs</th><th>Incomplete</th><th>First as-of</th><th>Last as-of</th><th>Reconstructed</th></tr></thead>
+          <tbody id="history-coverage-tbody"></tbody>
+        </table>
+      </div>
+      <div class="note-banner" id="history-empty-note" style="display:none;">
+        The archive is empty. Either no run has completed since the Phase G archive step landed, or archiving is
+        failing silently — check the most recent Actions run before trusting anything downstream.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Projection revisions</h2>
+      <div class="hint" style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:14px;">
+        How each player's projection for one gameweek moved as new information arrived. Fixes the
+        <em>event</em> (the gameweek being projected) and tracks it across as-of times — which spans
+        multiple run-target partitions, since every run whose 5-gameweek horizon covers that event
+        projected it.
+      </div>
+      <div class="note-banner" id="history-revision-insufficient" style="display:none;"></div>
+      <div class="chart-box" id="history-revision-box" style="display:none;"><canvas id="chart-revision"></canvas></div>
+    </div>
+  </section>
+
   <!-- ===================== VIEW 6: WEEK IN REVIEW ===================== -->
   <section class="view" id="view-review" role="tabpanel" aria-labelledby="tab-review">
     <div class="card">
@@ -516,6 +553,12 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
 
 <script>
 const DATA = /*__DATA__*/;
+/* Phase G: written separately by scripts/build_history_data.py. The builder
+   ALWAYS substitutes this placeholder — with the literal `null` when
+   history.json is absent — exactly like __DATA__ above. Do not write a
+   fallback value after the comment: the substitution would leave it
+   dangling (`{...}null`) and break the whole page, not just this view. */
+const HISTORY = /*__HISTORY__*/;
 </script>
 <script>
 (function(){
@@ -984,6 +1027,51 @@ function renderTicker(fixtures, dual){
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
       plugins:{legend:{display:false}},
       scales:{x:{ticks:{color:CHALK_DIM},grid:{color:BORDER}},y:{ticks:{color:CHALK_DIM},grid:{display:false}}}}
+  });
+})();
+
+/* ===================== VIEW: HISTORY (Phase G) ===================== */
+(function(){
+  if(!HISTORY) return;
+
+  const cov = HISTORY.coverage || [];
+  const tbody = document.getElementById('history-coverage-tbody');
+  if(cov.length === 0){
+    document.getElementById('history-empty-note').style.display = '';
+  } else {
+    cov.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="mono-cell">${r.gw}</td>
+        <td class="mono-cell">${r.n_complete}</td>
+        <td class="mono-cell">${r.n_incomplete > 0 ? '<span class="conf-low">'+r.n_incomplete+'</span>' : '0'}</td>
+        <td class="mono-cell">${r.first_asof}</td>
+        <td class="mono-cell">${r.last_asof}</td>
+        <td class="mono-cell">${r.n_reconstructed}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  const rev = HISTORY.revision || {sufficient:false};
+  if(!rev.sufficient){
+    const el = document.getElementById('history-revision-insufficient');
+    el.style.display = '';
+    el.textContent = `Not enough history yet. A revision series needs at least ${rev.min_required} completed runs within one gameweek; the archive currently has at most ${rev.n_runs_max_in_a_gameweek}. This view fills in automatically as the pipeline's four weekly runs accumulate — no code change needed.`;
+    return;
+  }
+
+  document.getElementById('history-revision-box').style.display = '';
+  const labels = (rev.series[0] && rev.series[0].asof) || [];
+  new Chart(document.getElementById('chart-revision'), {
+    type:'line',
+    data:{labels, datasets: rev.series.map((s,i)=>({
+      label:s.web_name, data:s.xpts, borderColor:SERIES[i % SERIES.length],
+      backgroundColor:SERIES[i % SERIES.length], tension:0.25, pointRadius:3,
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:CHALK,usePointStyle:true,pointStyle:'line'}},
+        title:{display:true,text:`xPts for GW${rev.event}, by when it was computed`,color:CHALK_DIM,font:{size:11}}},
+      scales:{x:{ticks:{color:CHALK_DIM},grid:{display:false}},
+              y:{ticks:{color:CHALK_DIM},grid:{color:BORDER}}}}
   });
 })();
 

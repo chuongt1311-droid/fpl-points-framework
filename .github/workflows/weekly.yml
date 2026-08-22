@@ -89,6 +89,12 @@ jobs:
       - name: Archive this run (append-only, provenance-stamped)
         run: python -m fpl.history.archive
 
+      # Phase G: reads data/history/ via fpl.history.query only. Runs BEFORE
+      # the dashboard build so this run's history.json is the one embedded
+      # into index.html.
+      - name: Dashboard history data (reads the archive, never recomputes)
+        run: python scripts/build_history_data.py
+
       - name: Dashboard data (reads pipeline outputs, never recomputes)
         run: python scripts/build_dashboard_data.py
         env:
@@ -98,7 +104,7 @@ jobs:
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/index.html
+          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/history.json dashboard/index.html
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else
