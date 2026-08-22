@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -62,8 +64,34 @@ def _gw_from_name(p: Path) -> Optional[int]:
         return None
 
 
+def _write_id_code_map(asof: str, players_parquet: Optional[Path]) -> bool:
+    """Reconstruct the id->code sidecar for a migrated run.
+
+    Uses the CURRENT players.parquet, which is legitimate here and only
+    here: FPL's `id` is unstable ACROSS seasons but stable WITHIN one, and
+    the crude partitions being migrated are from this same season. Ids are
+    never reassigned mid-season — new players only ever get new ids — so
+    today's map is a superset of the one that was live at `asof`, and the
+    join is exact for every id the partition actually contains.
+
+    Returns False if no map could be built, so the caller can say so
+    rather than leaving a silently code-less partition.
+    """
+    if players_parquet is None or not players_parquet.exists():
+        return False
+    df = pd.read_parquet(players_parquet)
+    cols = [c for c in ("id", "code", "web_name") if c in df.columns]
+    if "code" not in cols:
+        return False
+    dst = paths.id_code_map_path(asof)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    df[cols].to_parquet(dst, index=False)
+    return True
+
+
 def migrate_one(crude_dir: Path, *, deadline_utc: Optional[str],
-                trigger: Optional[str]) -> dict:
+                trigger: Optional[str],
+                players_parquet: Optional[Path] = None) -> dict:
     asof = crude_dir.name
     asof_dt = paths.parse_asof(asof)
     archived = []
@@ -115,6 +143,8 @@ def migrate_one(crude_dir: Path, *, deadline_utc: Optional[str],
         deadline = datetime.fromisoformat(deadline_utc.replace("Z", "+00:00"))
         hours = (deadline - asof_dt.astimezone(timezone.utc)).total_seconds() / 3600.0
 
+    has_map = _write_id_code_map(asof, players_parquet)
+
     meta = {
         "run_id": None,
         "asof": asof,
@@ -127,6 +157,7 @@ def migrate_one(crude_dir: Path, *, deadline_utc: Optional[str],
         "deadline_utc": deadline_utc,
         "hours_to_deadline": hours,
         "provenance": "reconstructed",
+        "id_code_map": "reconstructed_from_current_season" if has_map else None,
         "archived": archived,
     }
     dst = paths.run_json_path(asof)
@@ -143,6 +174,9 @@ def main() -> int:
                     help="Known trigger for the crude run(s); pass empty for unknown.")
     ap.add_argument("--delete-crude", action="store_true",
                     help="Remove the crude directory after a verified migration.")
+    ap.add_argument("--players-parquet",
+                    default=str(REPO_ROOT / "data" / "processed" / "players.parquet"),
+                    help="Source for the reconstructed id->code sidecar.")
     args = ap.parse_args()
 
     crude = find_crude_dirs()
@@ -152,9 +186,13 @@ def main() -> int:
 
     for d in crude:
         meta = migrate_one(d, deadline_utc=args.deadline_utc or None,
-                           trigger=args.trigger or None)
+                           trigger=args.trigger or None,
+                           players_parquet=Path(args.players_parquet) if args.players_parquet else None)
         print(f"Migrated {d.name}: {len(meta['archived'])} partition(s), "
               f"target GW{meta['target_gameweek']}, provenance={meta['provenance']}")
+        if meta["id_code_map"] is None:
+            print("  WARNING: no id->code sidecar written — this partition will "
+                  "have null `code` and cannot be joined across a season boundary.")
         if args.delete_crude:
             shutil.rmtree(d)
             print(f"  removed crude dir {d} (recoverable from git history)")

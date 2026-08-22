@@ -1,0 +1,58 @@
+{
+  "run_id": null,
+  "asof": "20260822T125314Z",
+  "asof_iso": "2026-08-22T12:53:14+00:00",
+  "git_sha": null,
+  "git_dirty": null,
+  "config_sha256": null,
+  "trigger": "workflow_dispatch",
+  "target_gameweek": 1,
+  "deadline_utc": "2026-08-21T17:30:00Z",
+  "hours_to_deadline": -19.38722222222222,
+  "provenance": "reconstructed",
+  "id_code_map": "reconstructed_from_current_season",
+  "archived": [
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "projections\\gw=1\\asof=20260822T125314Z\\model=m0_rules\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "projections\\gw=1\\asof=20260822T125314Z\\model=m2_xg\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "projections\\gw=1\\asof=20260822T125314Z\\model=m3_understat\\players.parquet"
+    },
+    {
+      "domain": "decisions",
+      "gw": 1,
+      "model": null,
+      "path": "decisions\\gw=1\\asof=20260822T125314Z\\recommendation.json"
+    },
+    {
+      "domain": "health",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "health\\gw=1\\asof=20260822T125314Z\\model=m0_rules\\model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "health\\gw=1\\asof=20260822T125314Z\\model=m2_xg\\model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "health\\gw=1\\asof=20260822T125314Z\\model=m3_understat\\model_health.json"
+    }
+  ]
+}

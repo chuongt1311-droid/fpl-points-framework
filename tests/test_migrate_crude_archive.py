@@ -89,6 +89,27 @@ def test_unknown_trigger_is_null_not_guessed(tmp_path, monkeypatch):
     assert meta["hours_to_deadline"] is None
 
 
+def test_writes_id_code_sidecar_when_players_parquet_available(tmp_path, monkeypatch):
+    """Without this, migrated partitions have null `code` and cannot be
+    joined across a season boundary — the identity-mapping failure mode."""
+    hist, crude = _seed_crude(tmp_path, monkeypatch)
+    players = tmp_path / "players.parquet"
+    pd.DataFrame({"id": [1], "code": [154561], "web_name": ["Raya"]}).to_parquet(players, index=False)
+
+    meta = mig.migrate_one(crude, deadline_utc=None, trigger=None, players_parquet=players)
+
+    assert meta["id_code_map"] == "reconstructed_from_current_season"
+    m = pd.read_parquet(hist / "_runs" / f"asof={ASOF}" / "id_code_map.parquet")
+    assert m.loc[m["id"] == 1, "code"].iloc[0] == 154561
+
+
+def test_missing_players_parquet_is_flagged_not_silently_skipped(tmp_path, monkeypatch):
+    _, crude = _seed_crude(tmp_path, monkeypatch)
+    meta = mig.migrate_one(crude, deadline_utc=None, trigger=None,
+                           players_parquet=tmp_path / "absent.parquet")
+    assert meta["id_code_map"] is None
+
+
 def test_refuses_to_migrate_twice(tmp_path, monkeypatch):
     _, crude = _seed_crude(tmp_path, monkeypatch)
     mig.migrate_one(crude, deadline_utc=None, trigger=None)

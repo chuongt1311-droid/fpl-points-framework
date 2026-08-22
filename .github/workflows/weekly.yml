@@ -80,27 +80,19 @@ jobs:
       - name: Decide — squad/XI/captain recommendations
         run: python -m fpl.decide.optimiser
 
+      # Phase G (docs/superpowers/specs/2026-08-22-history-layer-design.md):
+      # append-only, provenance-stamped, hive-partitioned archive. Replaces
+      # the Tier 0.2 crude copy step. Placed immediately after Decide so the
+      # archive unambiguously captures what the pipeline decided, and is not
+      # downstream of build_dashboard_data.py's known data/processed
+      # overwrite bug (docs/HANDOFF.md §9).
+      - name: Archive this run (append-only, provenance-stamped)
+        run: python -m fpl.history.archive
+
       - name: Dashboard data (reads pipeline outputs, never recomputes)
         run: python scripts/build_dashboard_data.py
         env:
           PYTHONPATH: "."
-
-      # v4 plan §3.4/§4 (Tier 0.4, "do the crude version today"): every run
-      # up to now has overwritten data/projections + data/output in place,
-      # permanently losing the previous run's revision. This is the
-      # deliberately crude stopgap — a straight timestamped copy, no schema,
-      # no partitioning by gameweek — so nothing more is lost while the
-      # proper bitemporal archive (v4 plan §G2: Parquet + DuckDB) gets
-      # designed. Never overwrites a prior archive directory (append-only,
-      # same rule as the availability snapshot itself).
-      - name: Archive this run's projections + decisions (crude, pre-schema)
-        run: |
-          ts="$(date -u +%Y%m%dT%H%M%SZ)"
-          dest="data/history/${ts}"
-          mkdir -p "$dest"
-          [ -d data/projections ] && cp -r data/projections "$dest/projections"
-          [ -d data/output ] && cp -r data/output "$dest/output"
-          echo "Archived run to $dest"
 
       - name: Commit + push regenerated artefacts
         run: |

@@ -93,16 +93,23 @@ class Archive:
         if not complete:
             return _EMPTY_PROJECTIONS.copy()
 
+        pattern = _glob(self.root, "projections", "**", "*.parquet")
+        if not any(self.root.glob("projections/**/*.parquet")):
+            # Genuinely nothing archived yet — an empty result, not an error.
+            # Checked in Python rather than by catching DuckDB's IOException,
+            # so a real read failure still surfaces instead of silently
+            # looking like an empty archive.
+            return _EMPTY_PROJECTIONS.copy()
+
         con = self._connect()
         try:
-            pattern = _glob(self.root, "projections", "**", "*.parquet")
+            # PARAMETER BINDING, never f-string interpolation: this repo's
+            # own path contains an apostrophe ("D:\CT's Portfolio\..."),
+            # which terminates a SQL string literal and made every real
+            # query fail while tmp_path-based tests passed.
             df = con.execute(
-                f"SELECT * FROM read_parquet('{pattern}', hive_partitioning=true)"
+                "SELECT * FROM read_parquet(?, hive_partitioning=true)", [pattern]
             ).fetch_df()
-        except Exception:
-            # An empty or unreadable projections tree is an empty result,
-            # not a crash — the dashboard must still render.
-            return _EMPTY_PROJECTIONS.copy()
         finally:
             con.close()
 

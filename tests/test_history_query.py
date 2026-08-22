@@ -119,3 +119,34 @@ def test_empty_archive_returns_empty_frames_not_errors(tmp_path, monkeypatch):
     a = query.open_archive(hist)
     assert a.runs().empty
     assert a.coverage().empty
+    assert a.projections().empty
+
+
+def test_archive_path_containing_an_apostrophe_still_queries(tmp_path, monkeypatch):
+    """REGRESSION: this repo lives at "D:\\CT's Portfolio\\FPL Pipeline".
+
+    The first implementation interpolated the glob into SQL with an
+    f-string, so the apostrophe terminated the string literal and DuckDB
+    raised a ParserException — which a broad `except Exception` then
+    swallowed into an empty result. Every tmp_path test passed while
+    every real query silently returned nothing. Bind parameters instead.
+    """
+    hist = tmp_path / "CT's Portfolio" / "history"
+    monkeypatch.setattr(paths, "HISTORY_DIR", hist)
+    _write_run(hist, "20260818T090000Z", 1, [(1, 1, 5.0), (1, 2, 4.0)])
+
+    df = query.open_archive(hist).projections()
+    assert len(df) == 2
+    assert set(df["event"]) == {1, 2}
+
+
+def test_unreadable_archive_raises_rather_than_looking_empty(tmp_path, monkeypatch):
+    """A corrupt parquet must surface, not masquerade as 'nothing archived'
+    — silent failure is the exact bug class this archive exists to expose."""
+    hist = tmp_path / "history"
+    monkeypatch.setattr(paths, "HISTORY_DIR", hist)
+    _write_run(hist, "20260818T090000Z", 1, [(1, 1, 5.0)])
+    paths.projections_partition(1, "20260818T090000Z", "m0_rules").write_bytes(b"not a parquet file")
+
+    with pytest.raises(Exception):
+        query.open_archive(hist).projections()
