@@ -71,10 +71,18 @@ session — see `docs/PROJECT_LOG.md` §12 for full detail:
   bitemporal schema (v4 plan §G2) gets designed; added
   `scripts/check_staleness.py` (fails the job if the newest availability
   snapshot row is >4 days old) and a failure-notification step that
-  opens/reuses a single tracking GitHub issue. **Not done: manually
-  triggering `workflow_dispatch` to verify these changes end-to-end** —
-  nothing from this session is pushed yet, so there's nothing on the
-  default branch to trigger against.
+  opens/reuses a single tracking GitHub issue. **All verified live.** The
+  schedule was already proven alive by two real scheduled runs
+  (`85d9312`, `b40eb0e`); after pushing this session's work a manual
+  `workflow_dispatch` (run #3) went **green in 1m20s** and produced
+  `c8ec4fa`, which confirms the archive step wrote
+  `data/history/20260822T125314Z/` (recommendations + all three
+  `model_health*.json` + all three model `projections/*.parquet`), the
+  staleness assert passed, and the bot's `index.html` regeneration
+  correctly picked up this session's `template.html` accessibility
+  changes. **One caveat, stated plainly: the `if: failure()`
+  notification step is still unproven** — the run succeeded, so that
+  branch never executed. Deliberately fail a run once to test it.
 - **GW1 actuals + hindsight hand-check (Tier 0.4): genuinely
   calendar-blocked, not started.** `bootstrap-static`'s GW1
   `finished`/`data_checked` are both still `false` as of this session —

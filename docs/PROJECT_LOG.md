@@ -1365,15 +1365,40 @@ file; the proper bitemporal schema (Parquet partitioned by
   `actions/github-script` that opens a tracking issue titled "Weekly
   pipeline failed" (or comments on it if still open, rather than spawning
   a new issue per failed run).
-- **Not done this session**: manually triggering `workflow_dispatch` to
-  reconfirm the workflow runs end-to-end with these changes — the
-  workflow file edits are still local/uncommitted (nothing pushed this
-  session; see below), and triggering a run only makes sense once pushed.
-  Separately, `git log` already shows a genuine automated commit from
-  `fpl-pipeline-bot` dated 2026-08-21T09:25:53Z (commit `85d9312`),
-  which is real evidence the schedule fired at least once before this
-  session — but that predates today's workflow edits and doesn't
-  substitute for re-verifying them.
+- **The schedule is confirmed alive.** On pushing this session's work, the
+  push was rejected non-fast-forward: `origin/main` had moved ahead with
+  `b40eb0e`, `chore: automated pipeline run (2026-08-22T09:28:08Z)` from
+  `fpl-pipeline-bot` — a **real scheduled run that fired during this
+  session** (the Sat 09:00 UTC cron, +28 min runner drift), touching
+  `data/processed/*.parquet`, `data/projections/gw1.parquet`,
+  `data/output/gw1_recommendations.json`, `data/snapshots/
+  availability_2026-27.csv` (+600 rows), `dashboard/data.json` and
+  `dashboard/index.html`. Together with `85d9312` (2026-08-21T09:25:53Z)
+  that is two consecutive real scheduled runs. The workflow is not
+  hypothetical.
+- **This session's `weekly.yml` edits are now verified live.** `b40eb0e`
+  had run against the OLD workflow (this session's edits hadn't landed
+  yet), so after pushing, a manual `workflow_dispatch` was triggered
+  from the repo's Actions tab (run #3, "Manually run by
+  chuongt1311-droid"). Result: **green, 1m20s**, and it produced
+  `c8ec4fa` — whose diff confirms each new step did its job:
+  - **Archive step works**: `data/history/20260822T125314Z/` created,
+    containing `output/gw1_recommendations.json`, all three
+    `model_health*.json`, and `projections/gw1.parquet` +
+    `m2_xg/gw1.parquet` + `m3_understat/gw1.parquet`. The
+    overwrite-every-run data loss has stopped as of this timestamp.
+  - **Staleness assert passed** (the job is green, so
+    `check_staleness.py` exited 0 against a snapshot written minutes
+    earlier in the same run).
+  - **Dashboard regeneration picks up template changes correctly**: the
+    bot's regenerated `dashboard/index.html` contains all 14 of this
+    session's accessibility markers, confirming the
+    `template.html` → `index.html` path survives an unattended run.
+  - **Failure notification: NOT exercised**, and honestly so — the job
+    succeeded, so the `if: failure()` branch never ran. Its
+    issue-open/comment logic is therefore still unproven code. Worth
+    deliberately failing a run once (e.g. a throwaway branch with a
+    forced `exit 1`) rather than assuming it works; noted as open.
 
 ### Tier 0.4 — GW1 actuals + hindsight hand-check
 
@@ -1514,6 +1539,27 @@ substituting the *restored* `data.json` into the polished
 `template.html` directly (bypassing `build_dashboard_data.py`'s
 recompute entirely) — verified byte-identical to HEAD except for the
 intended template changes.
+
+**Corroborating evidence found minutes later, worth recording because it
+cuts both ways.** The scheduled Actions run `b40eb0e` (2026-08-22
+09:28:08Z) landed on `origin/main` during this same session and wrote
+its own `data/processed/*.parquet`: `baseline.parquet` 116279→**116314**
+bytes and `defcon.parquet` 25162→**25192** bytes — byte-for-byte the
+sizes the local accidental recompute had produced, with
+`players.parquet` within 6 bytes (73578 vs 73584, consistent with
+nondeterministic parquet metadata). So:
+- **The observed local drift was not corruption.** It was the same
+  legitimate GW1 availability/status refresh the official pipeline
+  independently computed from the same live FPL data. Worth stating
+  plainly rather than leaving the earlier paragraphs implying the
+  numbers were wrong — they weren't.
+- **The bug is nonetheless real and unchanged.** The script still writes
+  files its docstring says it only reads, still keyed to whatever is in
+  the gitignored `data/raw/` at call time. It was harmless *this* time
+  only because the local raw pull happened to be as fresh as the
+  pipeline's. A stale, mid-test, or partially-written `data/raw/` would
+  have produced exactly the same silent overwrite with wrong values, no
+  error, and no test catching it. The fix is still needed.
 
 **Not fixed — needs its own pass**: the real fix is giving
 `build_player_inputs` (or a new sibling) a genuinely pure, non-persisting
