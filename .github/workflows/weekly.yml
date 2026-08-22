@@ -21,8 +21,14 @@ on:
     - cron: "0 16 * * 6"  # Sat 16:00 — post-deadline: captures the resolved lineup picture
   workflow_dispatch: {}   # manual trigger
 
+# NOTE: once a `permissions:` block exists, every scope NOT listed here
+# defaults to `none` -- it is not additive to the repo default. Omitting
+# `issues: write` made the failure-notification step below 403 with
+# "Resource not accessible by integration" on every failed run, silently.
+# Proven by a deliberate failure test on 2026-08-22; see PROJECT_LOG section 15.
 permissions:
   contents: write  # needed to commit regenerated artefacts back to main
+  issues: write    # needed by the failure-notification step to open/comment
 
 jobs:
   run-pipeline:

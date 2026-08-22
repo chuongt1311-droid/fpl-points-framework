@@ -1711,3 +1711,82 @@ missing and why), and §11 above records the same decision for a static
   overwrite (§13) is unchanged — a background task is on it. Every
   `index.html` regeneration in this session deliberately bypassed that
   script via direct template substitution to avoid tripping it.
+
+## 15. The failure notification never worked (2026-08-22, same day)
+
+Tier 0.3 added an `if: failure()` step to `weekly.yml` that opens a
+GitHub issue when the pipeline fails. It was shipped **unproven** — both
+verification runs succeeded, so the branch never executed, and §12
+recorded that honestly as an open item. Testing it deliberately is what
+this section is about, and it found a real bug.
+
+### The test
+
+A throwaway branch (`test-failure-notification`) with a forced `exit 1`
+as the first step, so the notification fires without any real pipeline
+work running or being committed. Dispatched via `workflow_dispatch`
+against that branch.
+
+### What it found
+
+**Run #4 failed as designed, the notification step ran as designed, and
+then it 403'd:**
+
+```
+RequestError [HttpError]: Resource not accessible by integration
+status: 403
+url: 'https://api.github.com/repos/.../issues'
+'x-accepted-github-permissions': 'issues=write'
+```
+
+Root cause: **a `permissions:` block is not additive.** Once present, any
+scope it does not list defaults to `none` — it does not inherit the
+repository default. `weekly.yml` declared only:
+
+```yaml
+permissions:
+  contents: write
+```
+
+so `issues` was `none`, and `github.rest.issues.create()` could never
+succeed. GitHub names the missing scope in the response header
+(`x-accepted-github-permissions: issues=write`), which is a genuinely
+helpful piece of API design and made the diagnosis immediate.
+
+**Why this mattered more than a normal bug.** The notification exists
+specifically because a failed Actions run is an email you learn to
+ignore — silent failure was the risk it was written to eliminate. Instead
+it *was* the silent failure: every real pipeline failure would have
+produced a red X, no issue, and no signal, while the repo carried a
+step that looked like monitoring. A monitoring mechanism that fails
+silently is worse than none, because it manufactures confidence that
+someone is watching. This is the same class as the `kbest` what-if
+params being inert (§11) — a feature that exists, looks correct, and
+does nothing.
+
+### The fix, and the proof
+
+One line — `issues: write` — plus a comment on the block explaining the
+not-additive semantics, since that is the part a future reader will get
+wrong again.
+
+Re-tested on the same branch:
+- **Run #5** (post-fix, forced failure): notification step succeeded and
+  opened **issue #1 "Weekly pipeline failed"**, authored by
+  `github-actions[bot]`, body carrying the UTC timestamp and a direct
+  link to the failing run. Verified in the browser.
+- **Run #6** (second forced failure, issue #1 still open): the dedupe
+  path works — still exactly **one** open issue, with the second failure
+  landing as a **comment** rather than a duplicate issue. Verified body
+  (run #5, `13:46:22Z`) and comment (run #6, `13:49:12Z`) each carry
+  their own run link. So a sustained outage produces one tracking thread
+  that accumulates timestamps, not four new issues a week.
+
+### Notes
+
+- Everything here happened on `test-failure-notification`, which contains
+  a deliberate `exit 1` and **must never be merged**. The permissions fix
+  itself was ported to `main` as a separate one-line commit.
+- No real pipeline work ran in any of these runs: the forced failure is
+  the first step, so nothing was collected, projected, archived, or
+  committed. `data/history/` was untouched throughout.
