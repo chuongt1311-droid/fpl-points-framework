@@ -1,7 +1,47 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-22, later (v4 plan proposed; Tier 0 executed;
-Sofascore/M4 closed permanently):** A new proposal, `docs/FPL_V4_PLAN.md`
+**Status as of 2026-08-22, latest (dashboard polish pass — keyboard
+accessibility + a real Player Explorer row-count bug):** Reviewed both
+dashboards (static `dashboard/template.html` + the live Flask app's
+`dashboard/live/index.html`) — already visually cohesive from last
+session's redesign, so no reskin. Fixed: tabs/sortable headers/
+expandable rows were all click-only with no keyboard path (added the
+ARIA tabs pattern + `tabindex`/`aria-sort`/`aria-expanded` +
+Enter/Space handling throughout, plus the live app's player-search
+dropdown options); Player Explorer's count label read the unfiltered
+row count while `renderRows` silently capped the table at 300 —
+dropped the cap (599 rows renders fine) so the label is honest again;
+added a "no players match" empty state. Verified live in the browser
+tool via dispatched keyboard events against the regenerated
+`index.html`, not just static markup review — all transitions
+(`aria-selected`, `aria-sort`, `aria-expanded`, focus movement) behave
+correctly, no console errors, both files' JS passes `node --check`.
+`.claude/launch.json` gained a `fpl-static-dashboard` preview entry.
+116/116 tests still passing. See `docs/PROJECT_LOG.md` §13. Not yet
+committed — see the entry below for the prior commit.
+
+**Real bug found in passing, NOT fixed (flagged as a background task):
+`scripts/build_dashboard_data.py` silently recomputes and overwrites
+`data/processed/*.parquet`** despite its own docstring claiming
+read-only. Caught because a routine `data/raw/` refresh (for Tier 0.4's
+GW1 check) plus a dashboard-verification re-run of this script changed
+42 real values in `dashboard/data.json`'s per-player channel breakdown —
+restored via `git restore --source=HEAD` before anything got committed.
+Root cause: `project.build_player_inputs()` → `build_players.
+build_players()` / `baseline.build_baseline()` / `defcon.build_defcon()`
+all persist to `data/processed/*.parquet` as a side effect of being
+called, using whatever's currently in the gitignored `data/raw/` — there
+is no pure, non-persisting path to the channel breakdown this script
+actually needs. Full root-cause writeup in `docs/PROJECT_LOG.md` §13.
+**Add to known open items below** — this is a real FROZEN/LIVE-boundary
+violation, not just a docstring inaccuracy: it means any local run of
+this script can silently corrupt the committed snapshot's internal
+consistency with no warning and no test catching it.
+
+**Status as of 2026-08-22, earlier (v4 plan proposed; Tier 0 executed;
+Sofascore/M4 closed permanently):** Committed as `827adc8` (bundled
+with the previously-uncommitted v3 close-out work below — not pushed
+yet). A new proposal, `docs/FPL_V4_PLAN.md`
 (external/user-supplied, not committed here, **not locked** — five open
 `[DECISION]` points in its Appendix B), picks up where the entry below
 stops. Its Tier 0 ("do these before any modelling work") is done this
@@ -587,6 +627,24 @@ throughout this file and the code's comments point into it.
 
 ## 9. Not yet done
 
+- **`scripts/build_dashboard_data.py` silently recomputes and overwrites
+  `data/processed/*.parquet` — a real FROZEN/LIVE boundary violation,
+  found 2026-08-22, not fixed.** Its own docstring claims read-only
+  ("Reads ONLY existing pipeline outputs... not re-derived"); in fact
+  `project.build_player_inputs()` cascades into `build_players.
+  build_players()` / `baseline.build_baseline()` / `defcon.build_defcon()`,
+  each of which persists to `data/processed/*.parquet` as a side effect,
+  using whatever's in the gitignored `data/raw/` at call time. Caught
+  when a routine `data/raw/` refresh plus a local dashboard-verification
+  run changed 42 real values in `dashboard/data.json`'s per-player
+  channel breakdown before anything was committed. Full root cause in
+  `docs/PROJECT_LOG.md` §13. Fix needs a genuinely pure, non-persisting
+  path to the channel breakdown (split compute-and-return from
+  compute-and-save in each of the three functions, or have this script
+  read the already-persisted parquet files directly) — real change to
+  `fpl/project/project.py`/`baseline.py`/`defcon.py`/
+  `fpl/transform/build_players.py`, needs its own careful re-verify pass
+  per this project's own convention, not a drive-by fix.
 - **Rotate the Bzzoiro API token.** It's in plaintext in a circulated
   `CHAT_HANDOFF.md` (not in this repo, but in a document that's been
   shared around) — spec §1.4. This needs to happen on the token-issuing

@@ -301,18 +301,18 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
     </div>
   </header>
 
-  <nav class="tabs">
-    <div class="tab active" data-view="week">This Week</div>
-    <div class="tab" data-view="explorer">Player Explorer</div>
-    <div class="tab" data-view="radar">Fixture Radar</div>
-    <div class="tab" data-view="chips">Chip Planner</div>
-    <div class="tab" data-view="health">Model Health</div>
-    <div class="tab" data-view="bakeoff">Bakeoff</div>
-    <div class="tab" data-view="review">Week in Review</div>
+  <nav class="tabs" role="tablist" aria-label="Dashboard views">
+    <div class="tab active" role="tab" tabindex="0" aria-selected="true" aria-controls="view-week" id="tab-week" data-view="week">This Week</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-explorer" id="tab-explorer" data-view="explorer">Player Explorer</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-radar" id="tab-radar" data-view="radar">Fixture Radar</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-chips" id="tab-chips" data-view="chips">Chip Planner</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-health" id="tab-health" data-view="health">Model Health</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-bakeoff" id="tab-bakeoff" data-view="bakeoff">Bakeoff</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-review" id="tab-review" data-view="review">Week in Review</div>
   </nav>
 
   <!-- ===================== VIEW 1: THIS WEEK ===================== -->
-  <section class="view active" id="view-week">
+  <section class="view active" id="view-week" role="tabpanel" aria-labelledby="tab-week">
     <div class="kpi-row">
       <div class="kpi hero"><div class="label">Projected XI total</div><div class="value mono" id="kpi-total"></div><div class="sub">this gameweek only, captain doubled</div></div>
       <div class="kpi"><div class="label">Squad cost</div><div class="value mono" id="kpi-cost"></div><div class="sub" id="kpi-budget"></div></div>
@@ -359,7 +359,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW 2: PLAYER EXPLORER ===================== -->
-  <section class="view" id="view-explorer">
+  <section class="view" id="view-explorer" role="tabpanel" aria-labelledby="tab-explorer">
     <div class="card">
       <div class="filters">
         <div class="filter-group">
@@ -390,15 +390,15 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
         <table id="explorer-table">
           <thead>
             <tr>
-              <th data-sort="web_name">Player</th>
-              <th data-sort="position">Pos</th>
-              <th data-sort="team_short">Club</th>
-              <th data-sort="price">Price</th>
-              <th data-sort="selected_by_percent">Own%</th>
-              <th data-sort="confidence">Conf.</th>
+              <th data-sort="web_name" tabindex="0">Player</th>
+              <th data-sort="position" tabindex="0">Pos</th>
+              <th data-sort="team_short" tabindex="0">Club</th>
+              <th data-sort="price" tabindex="0">Price</th>
+              <th data-sort="selected_by_percent" tabindex="0">Own%</th>
+              <th data-sort="confidence" tabindex="0">Conf.</th>
               <th>Next 6</th>
-              <th data-sort="total_xpts">GW1 xPts</th>
-              <th data-sort="weighted_xpts">5-GW wxPts</th>
+              <th data-sort="total_xpts" tabindex="0">GW1 xPts</th>
+              <th data-sort="weighted_xpts" tabindex="0">5-GW wxPts</th>
             </tr>
           </thead>
           <tbody id="explorer-tbody"></tbody>
@@ -408,7 +408,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW 3: FIXTURE RADAR ===================== -->
-  <section class="view" id="view-radar">
+  <section class="view" id="view-radar" role="tabpanel" aria-labelledby="tab-radar">
     <div class="card">
       <h2>Fixture Radar — next 8 gameweeks</h2>
       <div class="radar-toggle">
@@ -424,7 +424,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW 4: CHIP PLANNER ===================== -->
-  <section class="view" id="view-chips">
+  <section class="view" id="view-chips" role="tabpanel" aria-labelledby="tab-chips">
     <div class="card">
       <h2>Chip Planner</h2>
       <div class="note-banner" style="margin-top:0;margin-bottom:14px;">
@@ -435,7 +435,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW 5: MODEL HEALTH ===================== -->
-  <section class="view" id="view-health">
+  <section class="view" id="view-health" role="tabpanel" aria-labelledby="tab-health">
     <div class="kpi-row" id="health-kpis"></div>
     <div class="grid-2">
       <div class="card">
@@ -458,7 +458,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW: BAKEOFF (v3 plan §9 Phase F) ===================== -->
-  <section class="view" id="view-bakeoff">
+  <section class="view" id="view-bakeoff" role="tabpanel" aria-labelledby="tab-bakeoff">
     <div class="note-banner" style="margin-bottom:16px;">
       <b>Not a promotion signal.</b> These are single-retrospective-split backtest
       point estimates with no gameweek-clustered confidence interval — exactly the
@@ -495,7 +495,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
   </section>
 
   <!-- ===================== VIEW 6: WEEK IN REVIEW ===================== -->
-  <section class="view" id="view-review">
+  <section class="view" id="view-review" role="tabpanel" aria-labelledby="tab-review">
     <div class="card">
       <h2>Week in Review</h2>
       <div class="note-banner" id="review-placeholder" style="margin-top:0;margin-bottom:14px;">
@@ -537,13 +537,27 @@ if(window.Chart){
   Chart.defaults.plugins.tooltip.displayColors = true;
 }
 
-/* ---------------- tabs ---------------- */
-document.querySelectorAll('.tab').forEach(t=>{
-  t.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
-    t.classList.add('active');
-    document.getElementById('view-'+t.dataset.view).classList.add('active');
+/* ---------------- tabs (ARIA tabs pattern: roving tabindex, arrow-key nav) ---------------- */
+const tabEls = Array.from(document.querySelectorAll('.tab'));
+function activateTab(tab, focus){
+  tabEls.forEach(x=>{
+    x.classList.remove('active'); x.setAttribute('aria-selected','false'); x.tabIndex=-1;
+  });
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  tab.classList.add('active'); tab.setAttribute('aria-selected','true'); tab.tabIndex=0;
+  document.getElementById('view-'+tab.dataset.view).classList.add('active');
+  if(focus) tab.focus();
+}
+tabEls.forEach((t,i)=>{
+  t.addEventListener('click', ()=>activateTab(t, false));
+  t.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activateTab(t, false); return; }
+    let next = null;
+    if(e.key==='ArrowRight') next = tabEls[(i+1)%tabEls.length];
+    else if(e.key==='ArrowLeft') next = tabEls[(i-1+tabEls.length)%tabEls.length];
+    else if(e.key==='Home') next = tabEls[0];
+    else if(e.key==='End') next = tabEls[tabEls.length-1];
+    if(next){ e.preventDefault(); activateTab(next, true); }
   });
 });
 
@@ -699,15 +713,31 @@ function renderTicker(fixtures, dual){
       return sortDir==='asc'?cmp:-cmp;
     });
 
+    // Every filtered row is rendered — 600 players is the entire game's pool,
+    // trivial for the DOM, and a silent render cap here previously left the
+    // count label ("N of 600 players") claiming more rows than actually
+    // existed in the table underneath it.
     document.getElementById('explorer-count').textContent = `${rows.length} of ${DATA.players.length} players`;
-    renderRows(rows.slice(0,300));
+    renderRows(rows);
   }
 
   function renderRows(rows){
     const tbody = document.getElementById('explorer-tbody');
     tbody.innerHTML='';
+    if(rows.length===0){
+      const tr = document.createElement('tr');
+      const td = document.createElement('td'); td.colSpan=9; td.style.textAlign='center';
+      td.style.color='var(--chalk-dim)'; td.style.padding='22px 10px';
+      td.textContent = 'No players match these filters.';
+      tr.appendChild(td); tbody.appendChild(tr);
+      return;
+    }
     rows.forEach(p=>{
-      const tr = document.createElement('tr'); tr.className='player-row'+(p.confidence==='low'?' low-conf':'');
+      const tr = document.createElement('tr');
+      tr.className='player-row'+(p.confidence==='low'?' low-conf':'');
+      tr.tabIndex = 0; tr.setAttribute('role','button');
+      tr.setAttribute('aria-expanded','false');
+      tr.setAttribute('aria-label', `${p.web_name} — show projection breakdown`);
       tr.innerHTML = `
         <td>${p.web_name}${p.status!=='a'?' <span class="status-flag">'+p.status.toUpperCase()+'</span>':''}</td>
         <td><span class="badge-pos pos-${p.position}">${p.position}</span></td>
@@ -720,12 +750,15 @@ function renderTicker(fixtures, dual){
         <td class="mono-cell">${fmt1(p.weighted_xpts)}</td>`;
       tr.querySelector('.ticker-cell').appendChild(renderTicker(p.fixtures, p.position==='DEF'));
       tr.addEventListener('click', ()=>toggleDetail(tr, p));
+      tr.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleDetail(tr, p); }
+      });
       tbody.appendChild(tr);
     });
   }
 
   function toggleDetail(tr, p){
-    if(openRow && openRow.detail){ openRow.detail.remove(); }
+    if(openRow && openRow.detail){ openRow.detail.remove(); openRow.tr.setAttribute('aria-expanded','false'); }
     if(openRow && openRow.tr===tr){ openRow=null; return; }
     const detail = document.createElement('tr'); detail.className='detail-row open';
     const td = document.createElement('td'); td.colSpan=9;
@@ -733,16 +766,28 @@ function renderTicker(fixtures, dual){
     td.appendChild(renderChannelBars(p));
     detail.appendChild(td);
     tr.after(detail);
+    tr.setAttribute('aria-expanded','true');
     openRow = {tr, detail};
   }
 
+  function updateSortIndicators(){
+    document.querySelectorAll('#explorer-table thead th[data-sort]').forEach(th=>{
+      th.setAttribute('aria-sort', th.dataset.sort===sortKey ? (sortDir==='asc'?'ascending':'descending') : 'none');
+    });
+  }
   document.querySelectorAll('#explorer-table thead th[data-sort]').forEach(th=>{
-    th.addEventListener('click', ()=>{
+    function doSort(){
       const key = th.dataset.sort;
       if(sortKey===key){ sortDir = sortDir==='asc'?'desc':'asc'; } else { sortKey=key; sortDir='desc'; }
+      updateSortIndicators();
       applyFilters();
+    }
+    th.addEventListener('click', doSort);
+    th.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); doSort(); }
     });
   });
+  updateSortIndicators();
   ['f-search','f-pos','f-team','f-price-max','f-hide-low','f-hide-unavail'].forEach(id=>{
     document.getElementById(id).addEventListener('input', applyFilters);
   });

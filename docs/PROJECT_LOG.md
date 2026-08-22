@@ -1391,11 +1391,134 @@ which is the documented, correct behavior of
 availability-vs-projection regret correctly separated) is deferred
 until FPL actually flips `data_checked` for GW1.
 
-### State at end of session
+### State at end of Tier 0
 
 116/116 tests still passing (unchanged — no pipeline logic touched, only
-new standalone scripts + workflow/doc changes). Nothing has been
-committed or pushed yet; all Tier 0 changes are local, pending the
-user's review. Next up, per the decomposition agreed with the user:
-dashboard polish, then (once History archive design lands) the v4 Phase
-G views, then the decision layer (Phase H) — see `docs/HANDOFF.md`.
+new standalone scripts + workflow/doc changes). Committed as `827adc8`
+(bundled with the previously-uncommitted v3 close-out work — see that
+commit's message for the split). Not pushed yet.
+
+## 13. Dashboard polish pass (2026-08-22, same day)
+
+Per the decomposition agreed with the user, moved to dashboard polish
+next. Reviewed both the static dashboard (`dashboard/template.html`) and
+the live Flask decision layer (`dashboard/live/index.html`) — both
+already share one validated design-token system (dataviz-skill-checked
+palette, Archivo Narrow/Inter/JetBrains Mono type pairing, consistent
+card/KPI/interaction patterns) from last session's visual overhaul, so a
+reskin wasn't warranted. Found and fixed concrete, scoped issues instead:
+
+- **Keyboard accessibility gap, both dashboards.** The static dashboard's
+  view-switcher tabs, sortable Player Explorer column headers, and
+  expandable player rows were all click-only `<div>`/`<th>`/`<tr>`
+  elements with no keyboard path — unreachable and non-operable without a
+  mouse. Fixed with the standard ARIA tabs pattern (`role="tablist"`/
+  `"tab"`/`"tabpanel"`, roving `tabindex`, arrow/Home/End navigation) for
+  the nav, `tabindex` + `aria-sort` + Enter/Space handling for sortable
+  headers, and `tabindex` + `role="button"` + `aria-expanded` +
+  Enter/Space for the expandable rows. The live app's lock/ban
+  player-search dropdown options had the same gap (click-only `<div>`s);
+  gave them `tabindex` + `role="option"` + Enter/Space too. The global
+  `:focus-visible` outline (already defined) now actually has something
+  to attach to on all of these.
+- **Real bug: Player Explorer's row count silently lied.** `renderRows`
+  sliced to the first 300 matches while the count label above the table
+  read `${rows.length} of ${DATA.players.length}` off the *unsliced*
+  array — with no active filters that read "599 of 599 players" while
+  only 300 rows actually existed in the DOM beneath it, silently. 599
+  rows is trivial for a browser to render (verified), so the fix was to
+  drop the artificial cap rather than paginate or relabel around it.
+- **Missing empty state.** Filtering Player Explorer to zero matches
+  previously rendered a table with a header row and nothing else, no
+  indication of why. Added a "No players match these filters." row.
+
+Verified via the browser tool against the regenerated `index.html`
+(`scripts/build_dashboard_data.py`, PYTHONPATH=.): tab click/keyboard
+activation, arrow-key roving focus, Enter-to-sort with correct
+`aria-sort` transitions, Enter-to-expand a player row with correct
+`aria-expanded` transitions, and the empty-state message all confirmed
+working via dispatched real `KeyboardEvent`/`Event` objects against the
+live DOM (not just read as static markup) — no console errors before or
+after. Row count now genuinely matches the label (599 rendered = 599
+labelled) with the default unfiltered view. Both files' inline JS also
+passed a plain `node --check` syntax validation. `.claude/launch.json`
+gained a `fpl-static-dashboard` entry (`python -m http.server 8000
+--directory dashboard`) so the static dashboard has a preview
+configuration of its own, alongside the two existing live-app entries.
+
+Deliberately not touched this pass: visual redesign (already solid,
+would be scope creep against a working design), the live Flask app's
+broader interaction design, and Phase G's history-dependent dashboard
+views (Timeline/Revision/Decision-trail/Model-drift) — those need the
+history archive schema first, per the agreed sequencing.
+
+116/116 tests still passing (dashboard-only change; no pipeline logic
+touched). Next up, per the decomposition agreed with the user: the
+history-archive design (v4 Phase G), then the decision layer (v4 Phase
+H) — see `docs/HANDOFF.md`.
+
+### A real bug found in passing: `build_dashboard_data.py` silently recomputes and overwrites `data/processed/*.parquet`
+
+Not fixed this session (out of scope for a dashboard-polish pass, touches
+`fpl/project/project.py`/`baseline.py`/`defcon.py`/
+`fpl/transform/build_players.py` — core PROJECT/TRANSFORM layer code
+this project's own convention says needs a careful re-verify pass, not a
+drive-by fix), but confirmed and worth recording precisely rather than
+losing the finding.
+
+**What happened**: earlier in this session, `fpl.collect.fpl_client` was
+run once (to check GW1's `data_checked` flag for Tier 0.4) — an
+ordinary, gitignored `data/raw/` refresh, not a full pipeline run.
+Re-running `scripts/build_dashboard_data.py` afterward (to verify the
+dashboard polish changes) silently changed `data/processed/baseline.
+parquet`, `defcon.parquet`, and `players.parquet` — files this script's
+own docstring says it only *reads* ("Reads ONLY existing pipeline
+outputs... not re-derived"). Diffing the resulting `dashboard/data.json`
+against the last commit surfaced 42 real value changes in the per-player
+channel breakdown (`appearance_pts` flipping between `0.0` and a real
+value for several players — consistent with an availability/starting-
+status shift in the fresh live pull).
+
+**Root cause**: `build_dashboard_data.py` calls
+`project.build_player_inputs()` to compute its one derived view (the
+"why this projection" channel breakdown). That function calls
+`build_players.build_players()`, `baseline.build_baseline()`, and
+`defcon.build_defcon()` — and all three, per their own source
+(`build_players.py:132-133`, `baseline.py:300-301`, `defcon.py:152-153`),
+**write their result to `data/processed/*.parquet` as a side effect of
+being called**, using whatever's currently in `data/raw/` at that
+moment. There is no read-only code path to get the channel breakdown
+without also re-deriving and persisting the whole PROJECT-layer chain.
+
+**Why this matters**: this directly contradicts the FROZEN/LIVE boundary
+CLAUDE.md documents as structurally enforced ("the dashboard reads
+committed artefacts, never recomputes") and this file's own docstring.
+In practice it means **any local run of `build_dashboard_data.py` can
+silently mutate committed pipeline artifacts** using whatever happens to
+be in a machine's local, gitignored `data/raw/` at that moment — which
+may be stale, mid-test, or simply from a different day than the
+committed `data/output/gw{n}_recommendations.json` and `data/
+projections/gw{n}.parquet` it's supposed to be consistent with. In
+GitHub Actions this happens to be harmless today, because `weekly.yml`
+always runs the full transform+decide chain against the *same* raw pull
+immediately before calling this script — but that's incidental, not
+structural, and a future reordering or a second local invocation (e.g.
+exactly what happened this session) would silently corrupt the
+committed snapshot's internal consistency with no error, no warning, and
+no test catching it.
+
+**Handled this session by**: `git restore --source=HEAD` on the three
+`data/processed/*.parquet` files and `dashboard/data.json` after
+noticing the drift, then regenerating `dashboard/index.html` by
+substituting the *restored* `data.json` into the polished
+`template.html` directly (bypassing `build_dashboard_data.py`'s
+recompute entirely) — verified byte-identical to HEAD except for the
+intended template changes.
+
+**Not fixed — needs its own pass**: the real fix is giving
+`build_player_inputs` (or a new sibling) a genuinely pure, non-persisting
+path — either splitting the compute-and-return logic from the
+compute-and-save wrapper in each of `build_players.py`/`baseline.py`/
+`defcon.py`, or having `build_dashboard_data.py` read the already-
+persisted `data/processed/*.parquet` directly instead of recomputing
+inputs from raw. Flagged as a background task rather than fixed here.

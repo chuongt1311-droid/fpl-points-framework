@@ -152,6 +152,14 @@ dropped its own constraints). The working norm, visible throughout
 
 ## Known open items (as of the last session — check HANDOFF.md's header for updates)
 
+- **`scripts/build_dashboard_data.py` silently recomputes and overwrites
+  `data/processed/*.parquet`** — contrary to its own docstring and to
+  "never recomputes" above. `project.build_player_inputs()` cascades into
+  three functions that each persist to `data/processed/*.parquet` as a
+  side effect, using whatever's in the gitignored `data/raw/` at call
+  time. Found 2026-08-22 (docs/PROJECT_LOG.md §13); not fixed — needs a
+  genuinely pure, non-persisting path. A local run of this script can
+  silently corrupt the committed snapshot's consistency with no warning.
 - `fpl/decide/optimiser.py`: locking a player who's been filtered out by
   `apply_availability_filters` (e.g. injured) is silently ignored rather
   than failing loudly, despite the docstring's explicit claim otherwise —

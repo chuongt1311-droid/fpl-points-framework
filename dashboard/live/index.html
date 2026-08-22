@@ -396,11 +396,15 @@ function setupChipInput(kind){
     const matches = state.players.filter(p=>p.web_name.toLowerCase().includes(q) && !mine.has(p.id) && !other.has(p.id)).slice(0,8);
     if(!matches.length){ dropdown.innerHTML = '<div class="empty">No matches</div>'; }
     matches.forEach(p=>{
-      const opt = document.createElement('div'); opt.className='opt';
+      const opt = document.createElement('div'); opt.className='opt'; opt.tabIndex = 0; opt.setAttribute('role','option');
       opt.innerHTML = `<span>${p.web_name}</span><span class="pos">${p.position} · ${p.team_short} · ${fmtMoney(p.price)}</span>`;
-      opt.addEventListener('click', ()=>{
+      const pick = ()=>{
         mine.set(p.id, p); renderChips(kind);
-        search.value=''; dropdown.innerHTML=''; dropdown.classList.remove('open');
+        search.value=''; dropdown.innerHTML=''; dropdown.classList.remove('open'); search.focus();
+      };
+      opt.addEventListener('click', pick);
+      opt.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); pick(); }
       });
       dropdown.appendChild(opt);
     });
