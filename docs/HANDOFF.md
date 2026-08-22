@@ -118,9 +118,10 @@ session — see `docs/PROJECT_LOG.md` §12 for full detail:
   `model_health*.json` + all three model `projections/*.parquet`), the
   staleness assert passed, and the bot's `index.html` regeneration
   correctly picked up this session's `template.html` accessibility
-  changes. **One caveat, stated plainly: the `if: failure()`
-  notification step is still unproven** — the run succeeded, so that
-  branch never executed. Deliberately fail a run once to test it.
+  changes. The `if: failure()` notification step was left unproven by
+  this run (it succeeded, so that branch never executed) — later tested
+  deliberately and found **broken**; fixed and re-proven. See §9 and
+  `docs/PROJECT_LOG.md` §15.
 - **GW1 actuals + hindsight hand-check (Tier 0.4): genuinely
   calendar-blocked, not started.** `bootstrap-static`'s GW1
   `finished`/`data_checked` are both still `false` as of this session —
@@ -681,10 +682,14 @@ throughout this file and the code's comments point into it.
   finished actuals and several gameweeks of history; the archive that
   feeds them now exists and is accumulating. See `docs/PROJECT_LOG.md`
   §14.
-- **`weekly.yml`'s `if: failure()` notification branch is still
-  unproven.** Both verification runs succeeded, so that code has never
-  executed. Deliberately fail a run once (a throwaway branch with a
-  forced `exit 1`) to test it.
+- ~~**`weekly.yml`'s `if: failure()` notification branch is unproven.**~~
+  **Tested 2026-08-22, and it was broken.** A `permissions:` block is not
+  additive — once present, any scope it omits defaults to `none`. Only
+  `contents: write` was declared, so the step 403'd
+  ("Resource not accessible by integration") on every failure, silently.
+  Fixed with `issues: write` and re-proven end to end: first failure
+  opens the issue, second comments on it rather than duplicating. See
+  `docs/PROJECT_LOG.md` §15.
 - **`data/history/actuals/` has a defined partition path but no collector
   step** — GW1 is not final, so there is nothing to archive yet.
 - **`scripts/build_dashboard_data.py` silently recomputes and overwrites
