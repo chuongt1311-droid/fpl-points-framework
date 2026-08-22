@@ -1,7 +1,8 @@
 """
-live_data.py — v3 plan §E: the data-loading half of the live Streamlit
-decision layer, kept separate from app.py's UI code so the FROZEN/LIVE
-boundary (plan §E1) is enforced in one obvious place.
+live_data.py — v3 plan §E: the data-loading half of the live decision
+layer, kept separate from the UI code (Streamlit's app.py, and the
+Flask-based live_server.py) so the FROZEN/LIVE boundary (plan §E1) is
+enforced in one obvious place, framework-agnostically.
 
 **Everything in this file reads already-committed artefacts. Nothing
 here calls fpl.project.project.project_gameweeks(), fpl.transform.
@@ -12,6 +13,15 @@ would destroy the audit trail permanently (plan §E1's own words). The
 only computation this file does is RESHAPING already-computed numbers
 (fpl.project.project.weighted_horizon_total, a pure aggregation over a
 frozen parquet file) — never re-deriving them.
+
+Framework-agnostic on purpose: this module used to import Streamlit
+purely for `@st.cache_data`. That made it unusable from anything but a
+Streamlit runtime. The cache below (`_CACHE`, a plain dict keyed by the
+same `(model, gameweek, artefact_hash, config_hash)` tuple Streamlit was
+given) does the identical job — content-hash-keyed, so a redeploy with
+byte-identical output doesn't bust it but a real change always does —
+without requiring a specific web framework. Both `app.py` (Streamlit)
+and `live_server.py` (Flask) import this same module.
 """
 from __future__ import annotations
 
@@ -21,7 +31,6 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-import streamlit as st
 import yaml
 
 from fpl.project import project as project_mod
@@ -78,12 +87,19 @@ def _artefact_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
-@st.cache_data(show_spinner=False)
+_CACHE: dict[tuple, pd.DataFrame] = {}
+
+
 def _load_player_inputs_cached(model: str, gameweek: int, artefact_hash: str, config_hash: str) -> pd.DataFrame:
     """The actual cached loader — `artefact_hash`/`config_hash` are cache
-    keys only (plan §E4), not used inside; Streamlit's cache_data hashes
-    every argument, and a DataFrame/dict argument would be slow to hash
-    directly, so the caller pre-hashes the file/config instead."""
+    keys only (plan §E4), not used inside. A DataFrame/dict argument would
+    be slow to hash directly, so the caller pre-hashes the file/config
+    instead and this function is keyed on the resulting strings."""
+    key = (model, gameweek, artefact_hash, config_hash)
+    cached = _CACHE.get(key)
+    if cached is not None:
+        return cached
+
     config = load_config()
     path = _projection_path(model, gameweek)
     projections = pd.read_parquet(path)
@@ -91,6 +107,7 @@ def _load_player_inputs_cached(model: str, gameweek: int, artefact_hash: str, co
 
     players = pd.read_parquet(PROCESSED_DIR / "players.parquet")
     totals = totals.merge(players[["id", "code", "status"]], on="id", how="left")
+    _CACHE[key] = totals
     return totals
 
 

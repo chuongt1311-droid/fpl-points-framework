@@ -1,44 +1,75 @@
 # Dashboard (Phase 4) + Live Decision Layer (v3 plan §E)
 
-## Two apps in this directory, two different jobs
+## Three apps in this directory, three different jobs
 
 - `index.html` (below) — the static, point-in-time "This Week" snapshot.
   Read-only, offline, no server.
-- `app.py` — the LIVE decision layer (v3 plan §E), added once the
-  condition this file itself flagged ("if Phase 5 automation wants live
-  interactivity... that's the point to reconsider Streamlit") was met.
-  What-if squad exploration (lock/ban/budget/formation/chip scenarios,
-  K-best alternatives) against an already-committed, FROZEN projection —
-  never recomputes the model, never persists a live solve as your
-  official squad. Run it:
+- `live_server.py` + `live/index.html` — **the live decision layer,
+  Flask edition.** What-if squad exploration (lock/ban/budget/formation/
+  chip scenarios, K-best alternatives) against an already-committed,
+  FROZEN projection — never recomputes the model, never persists a live
+  solve as your official squad. This is the recommended way to run the
+  live layer now — same guardrails as `app.py` below, a purpose-built UI
+  instead of Streamlit's generic widget chrome. Run it:
+
+  ```powershell
+  & ".venv\Scripts\python.exe" -m dashboard.live_server
+  ```
+
+  Then open http://127.0.0.1:5000/. (Or use the `.claude/launch.json`
+  entry `fpl-live-decision-layer-flask` if you're driving this through
+  the Claude Code preview tool.)
+
+- `app.py` — the **legacy** Streamlit live decision layer (v3 plan §E's
+  original implementation). Left in place, still works, still useful if
+  Streamlit's faster prototyping loop is wanted for a quick one-off
+  experiment. Run it:
 
   ```powershell
   & ".venv\Scripts\python.exe" -m streamlit run dashboard/app.py
   ```
 
-  See `app.py`'s and `live_data.py`'s module docstrings for the full
-  FROZEN/LIVE boundary rule (plan §E1) and the reproducibility guard
-  (plan §E3 — EXPLORATORY labelling, the canonical recommendation always
-  pinned alongside, every live solve logged to
-  `data/scratch/live_solves.jsonl`, never written to `data/state/`).
+Both live apps share the exact same data-loading module
+(`dashboard/live_data.py`, framework-agnostic — no Streamlit import) and
+the exact same decision logic (`fpl/decide/optimiser.py`,
+`fpl/decide/kbest.py`). Neither is the source of a projection; see
+`live_data.py`'s module docstring for the full FROZEN/LIVE boundary rule
+(plan §E1) and the reproducibility guard (plan §E3 — EXPLORATORY
+labelling, the canonical recommendation always pinned alongside, every
+live solve logged to `data/scratch/live_solves.jsonl`, never written to
+`data/state/`).
+
+**Real bug fixed while building the Flask edition**: `kbest.
+find_k_best_squads` never accepted `locked_ids`/`banned_ids`/
+`banned_clubs`/`budget_override`/`force_formation`/`chip` — every
+what-if control in `app.py`'s sidebar was silently inert for K-best
+squad search; every "constrained" solve quietly returned the
+unconstrained frontier. Fixed in `fpl/decide/kbest.py`, regression-
+tested (`tests/test_kbest.py`), and `app.py`'s own call site updated to
+actually pass its sidebar state through. See `docs/PROJECT_LOG.md` for
+the full story of how the previous session's own verification missed it
+(it only exercised the no-constraints path).
 
 ## What the static dashboard (`index.html`) is
 
 A static, self-contained HTML dashboard (`index.html`) implementing the 5
 views from `docs/FPL_EXECUTION_PLAN.md` §7 — This Week, Player Explorer,
 Fixture Radar, Chip Planner, Model Health — using the exact token system,
-typography, and Fixture Ticker signature element from plan §7.1.
+typography, and Fixture Ticker signature element from plan §7.1. Plus a
+sixth, added later: **Bakeoff** (`docs/FPL_V3_PLAN.md` §9 Phase F) — M0 vs
+M2 vs M3's statistical scorecard side by side, reading only committed
+`data/output/model_health*.json` files, with the pre-registered GW12
+decision rule and an honest "not a promotion signal" banner. (Plan §9's
+"Alternatives" view — K-best frontier + cross-model agreement — was
+deliberately NOT added here: K-best is architecturally live-only per plan
+§E1, and already exists properly in the Flask live decision layer below.)
 
 **Deviation from the plan worth flagging:** §7.1/§11 describe a Streamlit
 app (`dashboard/app.py`, `.streamlit/config.toml`). This is a static HTML
 file instead — no server, opens directly in a browser, works offline. It
 was built this way because it's a point-in-time snapshot dashboard (the
 plan's own description of view 1) and a static file is the simplest thing
-that satisfies that. If Phase 5 automation (plan §8, weekly GitHub Actions
-regeneration + hosting) wants live interactivity beyond client-side
-filtering — e.g. editable chip state persisted across sessions — that's
-the point to reconsider Streamlit. Until then, this is strictly cheaper to
-build, run, and deploy (e.g. as a GitHub Pages artifact).
+that satisfies that.
 
 ## Files
 
@@ -48,8 +79,11 @@ build, run, and deploy (e.g. as a GitHub Pages artifact).
 - `data.json` — the data payload alone, for inspection/debugging.
 - `index.html` — **generated.** `template.html` with `data.json` inlined
   into it, so the dashboard is one fully offline-capable file. Don't hand-edit.
+- `live_server.py` / `live/index.html` — the Flask live decision layer.
+- `app.py` / `live_data.py` — the legacy Streamlit live decision layer
+  and its shared, framework-agnostic data-loading module.
 
-## How to regenerate
+## How to regenerate the static dashboard
 
 Run after any pipeline re-run (new gameweek, model change, re-optimised squad):
 
@@ -77,13 +111,9 @@ directly to get it — same code path production uses, not reimplemented.
   transfer to evaluate" because `fpl/decide/transfers.py` doesn't exist
   yet either. Once it does, wire its output through `data/output/` and
   this script the same way `gw1_recommendations.json` is wired now.
-- **Model Health**'s known-limitations list embeds two items from the
-  unresolved punch list in `HANDOFF.md` §5 (the `conceded_pts`
-  wrong-direction fixture multiplier bug, and DEFCON confidence not being
-  surfaced) *in addition to* the plan's own v1 limitations — because both
-  currently affect the live GW1 projections this same dashboard is
-  showing. If/when those get fixed, remove the two `KNOWN UNFIXED` entries
-  from the `known_limitations` list in `scripts/build_dashboard_data.py`.
 - Fixture Radar and the ticker both use `fixture_multipliers.parquet`,
   which is season-long and already has no missing-file gap (unlike
   `fixtures.parquet` itself — see `HANDOFF.md` §5 item 5).
+- The Flask live layer's K-best solve runs synchronously and blocks the
+  request until all `k` squads are found (same as `app.py` before it —
+  streaming results as each one lands is a real follow-up, see plan §E4).

@@ -41,6 +41,7 @@ import yaml
 
 from fpl.decide import squad_state as squad_state_mod
 from fpl.project import project as project_mod
+from fpl.status import UNAVAILABLE_STATUSES
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "data" / "output"
@@ -171,7 +172,7 @@ def optimise_squad(
     if apply_availability_filters:
         if not allow_low_confidence:
             pool = pool[pool["confidence"] != "low"]
-        pool = pool[~pool["status"].isin(["i", "s", "u"])]  # never select a definitely-unavailable player
+        pool = pool[~pool["status"].isin(UNAVAILABLE_STATUSES)]  # never select a definitely-unavailable player
     pool = pool.reset_index(drop=True)
 
     ids = pool["id"].tolist()

@@ -31,6 +31,9 @@ from fpl.decide import optimiser as opt_mod
 def find_k_best_squads(
     players: pd.DataFrame, config: dict, k: int = 5, diversity_d: int = 3,
     apply_availability_filters: bool = True,
+    locked_ids: Optional[list] = None, banned_ids: Optional[list] = None,
+    banned_clubs: Optional[list] = None, budget_override: Optional[float] = None,
+    force_formation: Optional[dict] = None, chip: Optional[str] = None,
 ) -> list[dict]:
     """
     Repeatedly calls optimiser.optimise_squad, adding a no-good cut after
@@ -39,6 +42,19 @@ def find_k_best_squads(
     than k results) if the pool is exhausted of sufficiently-different
     legal squads — a real, reportable outcome (a thin pool near the
     frontier), not an error.
+
+    locked_ids / banned_ids / banned_clubs / budget_override /
+    force_formation / chip: v3 plan §E2's what-if controls, forwarded
+    as-is to every optimise_squad call in the loop (all default None,
+    same "unset = unchanged behaviour" contract as optimise_squad
+    itself). **Real bug fixed here**: these six params previously existed
+    on optimise_squad but were never accepted by this function, so the
+    live decision layer's entire lock/ban/budget/formation/chip sidebar
+    was silently inert for every K-best squad search — every "what-if"
+    solve quietly ignored the what-if and returned the unconstrained
+    frontier instead. Caught while rebuilding the live layer; the prior
+    session's own verification only exercised the no-constraints path
+    (see docs/PROJECT_LOG.md), which is exactly why it wasn't caught then.
 
     Returns a list of optimise_squad's normal result dicts, each with two
     extra keys:
@@ -65,6 +81,8 @@ def find_k_best_squads(
             result = opt_mod.optimise_squad(
                 players, config, apply_availability_filters=apply_availability_filters,
                 extra_no_good_cuts=cuts,
+                locked_ids=locked_ids, banned_ids=banned_ids, banned_clubs=banned_clubs,
+                budget_override=budget_override, force_formation=force_formation, chip=chip,
             )
         except RuntimeError:
             # Infeasible — the pool has no more squads differing from every

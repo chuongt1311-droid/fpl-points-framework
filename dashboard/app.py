@@ -178,6 +178,9 @@ if solve_clicked:
         results = kbest_mod.find_k_best_squads(
             player_inputs, config, k=k_squads, diversity_d=diversity_d,
             apply_availability_filters=True,
+            locked_ids=locked or None, banned_ids=banned or None,
+            banned_clubs=banned_clubs_raw or None, budget_override=budget_override,
+            force_formation=force_formation, chip=chip_arg,
         )
         # optimise_squad itself doesn't take a progress callback — the
         # K-best loop is the natural place to report progress (plan §E4:

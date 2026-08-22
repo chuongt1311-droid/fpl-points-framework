@@ -29,6 +29,8 @@ from typing import Optional
 import pandas as pd
 import yaml
 
+from fpl.transform import build_fixtures as build_fixtures_mod
+
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
@@ -75,9 +77,18 @@ def league_averages(team_strengths: pd.DataFrame) -> dict[str, float]:
 
 
 def load_fixture_table() -> pd.DataFrame:
+    """HANDOFF.md §5 finding #5: unlike every other input in this package
+    (build_players/baseline/defcon/minutes), this used to just raise if
+    `fpl.transform.build_fixtures` was never separately run — breaking on
+    a fresh checkout that only ran the two COLLECT scripts. Now
+    self-builds from the raw fixtures.json, same "keep if present, build
+    if not" contract as build_players.build_players() elsewhere in this
+    package. Only raises (via build_fixtures itself) if the raw file is
+    ALSO missing, i.e. `fpl.collect.fpl_client` was never run at all."""
     path = PROCESSED_DIR / "fixtures.parquet"
     if not path.exists():
-        raise FileNotFoundError(f"{path} not found — run fpl.transform.build_fixtures first.")
+        fixture_table, _ = build_fixtures_mod.build_fixtures()
+        return fixture_table
     return pd.read_parquet(path)
 
 

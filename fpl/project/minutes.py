@@ -20,6 +20,7 @@ import pandas as pd
 import yaml
 
 from fpl.project import identity
+from fpl.status import UNAVAILABLE_STATUSES
 from fpl.transform import build_players
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
@@ -84,9 +85,25 @@ def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = No
     config = config or load_config()
     start_rates = compute_rolling_start_rate(players_df, config)
 
-    out = players_df[["id", "web_name", "status", "chance_of_playing_next_round"]].merge(
-        start_rates, on="id", how="left"
+    # HANDOFF.md §5 finding #6: build_players.py's own docstring promises
+    # "keep if present" for every ELEMENT_COLUMNS entry — it degrades
+    # gracefully (drops the column) if FPL ever omits `status` or
+    # `chance_of_playing_next_round` from bootstrap-static. A hard
+    # `players_df[[...]]` select here would KeyError instead, honouring
+    # that contract on the write side only. Built column-by-column with an
+    # explicit fallback so a missing column degrades the SAME way a
+    # present-but-null value already does per-row below (no chance data ->
+    # the rolling-start-rate fallback branch; no status -> nobody is
+    # flagged unavailable, the same as every player individually being
+    # status='a' today).
+    out = players_df[["id", "web_name"]].copy()
+    out["status"] = players_df["status"] if "status" in players_df.columns else "a"
+    out["chance_of_playing_next_round"] = (
+        players_df["chance_of_playing_next_round"]
+        if "chance_of_playing_next_round" in players_df.columns
+        else float("nan")
     )
+    out = out.merge(start_rates, on="id", how="left")
 
     # IMPORTANT: branch on the RAW chance_of_playing_next_round, not a
     # null->100 substitution. An earlier version pre-substituted null->100
@@ -104,7 +121,7 @@ def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = No
     # is where starter-vs-backup actually gets decided.
     chance = out["chance_of_playing_next_round"]
 
-    unavailable = out["status"].isin(["i", "s", "u"])
+    unavailable = out["status"].isin(UNAVAILABLE_STATUSES)
     has_chance = chance.notna()
     doubtful_no_chance = (out["status"] == "d") & ~has_chance
 
@@ -126,12 +143,32 @@ def apply_gk_backup_override(minutes_df: pd.DataFrame, players_df: pd.DataFrame,
     see config.minutes.backup_gk_factor's docstring for why. Never RAISES a
     factor, only caps it down, so an already-injured/unavailable "#1" stays
     at 0 rather than being artificially propped up.
+
+    HANDOFF.md §5 finding #3 (fixed): the "#1" used to be picked from a
+    STATIC price ranking with no re-check against current availability.
+    status-driven zeroing (compute_minutes_factor, above) correctly
+    zeroes an injured #1's OWN factor, but never re-promoted anyone —
+    the actual new starter at that club (the real backup, now playing)
+    wasn't the price-designated #1, so they stayed clipped at
+    backup_factor too, even though they'd become the real starter.
+    Fixed by ranking each team's GKs on (currently available, price,
+    rolling_start_rate) instead of price alone — an unavailable "#1"
+    drops out of contention for the #1 slot, so the next keeper up at
+    that club is re-promoted into it. "Currently available" is read off
+    minutes_df's own minutes_factor (already status-zeroed by the time
+    this runs), not re-derived. If every GK at a club is unavailable,
+    falls back to plain price ranking for the #1 slot — moot in
+    practice, since none of them will start regardless of this cap.
     """
     backup_factor = config["minutes"]["backup_gk_factor"]
     gk_ids = players_df[players_df["position"] == "GK"][["id", "team", "price"]]
-    gk = gk_ids.merge(minutes_df[["id", "rolling_start_rate"]], on="id", how="left")
+    gk = gk_ids.merge(minutes_df[["id", "rolling_start_rate", "minutes_factor"]], on="id", how="left")
+    gk["is_available"] = gk["minutes_factor"] > 0
 
-    gk_sorted = gk.sort_values(["team", "price", "rolling_start_rate"], ascending=[True, False, False])
+    gk_sorted = gk.sort_values(
+        ["team", "is_available", "price", "rolling_start_rate"],
+        ascending=[True, False, False, False],
+    )
     is_number_one = ~gk_sorted.duplicated(subset="team", keep="first")
     number_one_ids = set(gk_sorted.loc[is_number_one, "id"])
 

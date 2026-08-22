@@ -4,7 +4,8 @@ pyarrow==17.0.0
 pyyaml==6.0.2
 python-dotenv==1.0.1
 pulp==2.9.0
-streamlit==1.39.0
+streamlit==1.39.0   # legacy live decision layer (dashboard/app.py) — see dashboard/README.md
+flask==3.1.3        # live decision layer, Flask edition (dashboard/live_server.py)
 plotly==5.24.1
 pytest==8.3.3
 jupyter==1.1.1     # to open/run notebooks/*.ipynb — not used by the pipeline itself

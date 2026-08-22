@@ -48,6 +48,7 @@ from fpl.project import fixtures as fixtures_mod
 from fpl.project import minutes as minutes_mod
 from fpl.project import understat_blend as understat_blend_mod
 from fpl.project import xg_blend as xg_blend_mod
+from fpl.status import UNAVAILABLE_STATUSES
 from fpl.transform import build_players
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
@@ -200,7 +201,7 @@ def compute_channel_pts_per_fixture(
     # minutes_factor=0 because they're injured/suspended/unavailable has
     # ZERO chance of any minutes at all — (1-0)*bench_cameo_rate would
     # otherwise hand every injured player a phantom ~0.3 appearance_pts.
-    unavailable = df["status"].isin(["i", "s", "u"])
+    unavailable = df["status"].isin(UNAVAILABLE_STATUSES)
     p60 = df["minutes_factor"]
     p1to59 = ((1 - p60) * bench_cameo_rate).where(~unavailable, 0.0)
     df["appearance_pts"] = rules["appearance_60plus"] * p60 + rules["appearance_1to59"] * p1to59

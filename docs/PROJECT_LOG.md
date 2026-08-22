@@ -1050,3 +1050,352 @@ for all of them (plan §E4 mentions this — `find_k_best_squads` runs all
 solves before returning, a real follow-up for a K as large as 8-10);
 Free Hit's actual transfer-cost-term removal (blocked on
 `fpl/decide/transfers.py` not existing, same as noted above).
+
+### Dashboard visual overhaul + Flask live decision layer + a real kbest bug fix (2026-08-22)
+
+User request: a more visually distinctive dashboard than Streamlit's
+generic widget chrome allows, plus an updated static `index.html`. Two
+pieces of work, kept structurally separate per plan §E1's own boundary.
+
+**Static dashboard (`dashboard/template.html`, regenerated into
+`index.html`) — visual redesign, same data contract.** Ran the categorical
+chart palette that was already in use (`#F5B841,#4FA96B,#7fbdd6,#D9503F,
+#8172B3,#e39a7a`) through the dataviz skill's validator against the
+dashboard's real dark surface (`#101826`): **FAILED** both the lightness
+band and chroma floor checks (`#7fbdd6`/`#8172B3`/`#e39a7a` all read as
+near-gray at that surface). Replaced Chart.js series colors with the
+dataviz skill's reference 8-hue dark set, independently re-validated
+against `#101826` — **all checks pass** (worst adjacent CVD ΔE 8.4,
+worst normal-vision ΔE 19.3, all ≥3:1 contrast). Kept the brand's
+floodlight/grass/flag trio reserved for STATUS meaning only (captain
+highlight, fixture difficulty, warnings) rather than reusing them as
+chart-series colors, per the skill's "status colors are never reused for
+series identity" rule. Also: true SVG pitch markings (center circle,
+penalty arcs, halfway line) replacing the plain striped div, a hero KPI
+treatment for the headline number, hover tooltips on ticker/radar cells,
+card elevation + tab-switch transitions, and a corrected
+`known_limitations` list in `scripts/build_dashboard_data.py` — three of
+the ten entries referenced findings the v2/v3 sessions had already
+DISSOLVED (no xG/xA layer, no shrinkage, DEFCON confidence not surfaced —
+all three fixed since this list was last touched) and were replaced with
+the actually-open items from `HANDOFF.md` §5 (GK backup re-promotion,
+the hardcoded status-set triplication) plus an honest note on M2/M3's
+non-champion status. Regenerated and verified in the browser tool: all
+six tabs render with no console errors, explorer/radar tables populate
+(300 explorer rows, 21×8 radar grid), Model Health charts render against
+the new palette.
+
+**Live decision layer — added a Flask edition
+(`dashboard/live_server.py` + `dashboard/live/index.html`), kept the
+Streamlit one as legacy.** Same FROZEN/LIVE boundary (plan §E1), same
+EXPLORATORY/pinned-canonical/solve-logging guardrails (plan §E3) — a
+thin JSON API (`/api/state`, `/api/players`, `/api/canonical`,
+`/api/solve`) over the *same* `dashboard/live_data.py` and
+`fpl/decide/{optimiser,kbest}.py` calls `app.py` already made, with a
+purpose-built control-panel frontend instead of Streamlit's widget
+vocabulary (searchable lock/ban chip inputs, a formation button grid, a
+frontier-spread dot strip, collapsible squad cards). Made `live_data.py`
+framework-agnostic in the process — it only imported Streamlit for
+`@st.cache_data`; replaced with a plain dict cache keyed on the identical
+`(model, gameweek, artefact_hash, config_hash)` tuple, so both `app.py`
+and `live_server.py` now share one data-loading module with no framework
+lock-in. Added a `fpl-live-decision-layer-flask` entry to
+`.claude/launch.json` alongside the existing Streamlit one.
+
+**Real bug caught while wiring the Flask edition's `/api/solve` to
+`kbest.find_k_best_squads`**: that function's signature was
+`(players, config, k, diversity_d, apply_availability_filters)` —
+it never accepted `locked_ids`/`banned_ids`/`banned_clubs`/
+`budget_override`/`force_formation`/`chip`, despite `optimise_squad`
+(which it calls internally) supporting all six since the prerequisite
+commit. `app.py`'s entire sidebar of what-if controls was therefore
+silently inert for K-best squad search: every constrained "Solve" click
+quietly returned the *unconstrained* frontier, with the constraints only
+ever reaching `constraints_summary` (the log entry), never the actual
+MILP. This is exactly why the previous session's own "verified
+end-to-end" note above didn't catch it — it explicitly tested only the
+no-constraints path. Fixed by threading all six params through
+`find_k_best_squads`'s solve loop into every `optimise_squad` call;
+`app.py`'s call site updated to actually pass its sidebar state.
+Regression-tested (`tests/test_kbest.py`): lock a player absent from the
+unconstrained optimum and confirm it's now present in every returned
+squad; ban a player present in the unconstrained optimum and confirm
+it's now absent from every returned squad.
+
+**Verified end-to-end via the browser tool against the real Flask
+server**: locked a bench-tier player (Woolfenden) and forced formation
+4-4-2, clicked Solve — the returned squad #1 has exactly 4 DEF / 4 MID /
+2 FWD starting and Woolfenden sitting on the bench, both constraints
+genuinely enforced (not just logged). Frontier-spread strip and
+collapsible squad cards rendered correctly across all 3 returned
+squads. No console errors, no server errors in the Flask log.
+
+105 tests passing (was 103) — 2 new (`test_find_k_best_squads_forwards_
+locked_ids_to_every_solve`, `..._forwards_banned_ids_to_every_solve`).
+
+**Not done**: the Flask edition's K-best solve is still synchronous
+(same scope note as the Streamlit one above); no automated visual
+regression test for either dashboard (verification was browser-tool +
+manual inspection, consistent with this project's existing practice for
+UI work).
+
+### Closing out the rest of the plan: §5's remaining bugs, the Bakeoff view, and a blocked Sofascore attempt (2026-08-22, same day)
+
+User asked to "finish the rest of the plan." Four pieces of work.
+
+**HANDOFF.md §5 findings #3, #5, #6, #10 — all four remaining open bugs
+from the 2026-08-20 code review, fixed.**
+
+- **#10 (quick win, done first):** the unavailable-status set
+  `["i","s","u"]` was hardcoded identically in `minutes.py`, `project.py`,
+  `optimiser.py`. New `fpl/status.py` — `UNAVAILABLE_STATUSES` (frozenset)
+  + `is_unavailable()` — all three now import it.
+- **#5:** `fpl/project/fixtures.py`'s `load_fixture_table()` used to just
+  raise `FileNotFoundError` if `fpl.transform.build_fixtures` hadn't been
+  separately run — the one input in this package that didn't self-build,
+  unlike `build_players`/`baseline`/`defcon`/`minutes`. Fixed to call
+  `build_fixtures()` itself when the parquet is missing, same "keep if
+  present, build if not" contract; only raises if the raw `fixtures.json`
+  is ALSO missing.
+- **#6:** `minutes.py`'s `compute_minutes_factor` hard-selected
+  `players_df[["id","web_name","status","chance_of_playing_next_round"]]`
+  — if FPL ever omits `status` or `chance_of_playing_next_round`,
+  `build_players()` degrades gracefully (drops the column, per its own
+  docstring) but this hard select would `KeyError` instead, honouring the
+  "keep if present" contract on the write side only. Fixed to build each
+  column with an explicit fallback (`status` -> `"a"`, chance -> all-NaN)
+  matching how a present-but-null value already degrades per-row.
+- **#3 (the real one, most involved):** `apply_gk_backup_override` picked
+  each team's "#1" GK from a STATIC price ranking with no re-check
+  against current availability. `status`-driven zeroing (upstream, in
+  `compute_minutes_factor`) correctly zeroes an injured #1's OWN factor,
+  but this function never re-ranked — the actual new starter (the real
+  backup, now playing) wasn't the price-designated #1, so THEY stayed
+  clipped at `backup_factor` too, even after becoming the incumbent.
+  Fixed by ranking on `(currently available, price, rolling_start_rate)`
+  instead of price alone, reading "available" off `minutes_df`'s own
+  already-computed `minutes_factor` (not re-derived). Falls back to
+  plain price ranking if every GK at a club is unavailable simultaneously
+  (moot in practice).
+
+`fpl/project/minutes.py` had **no test file at all** before this session
+despite being where 2 of the original session's 4 bugs lived (findings 5
+and 6 in HANDOFF §4) — `tests/test_minutes.py` is new, covers both fixes
+plus a sanity check that normal (column-present) behaviour is unchanged.
+Re-ran `fpl.decide.optimiser` against the real GW1 data after all four
+fixes: byte-identical squad/numbers to before (64.56 next-GW, 223.80
+5-GW weighted, same captain/vice) — confirming zero regression, since
+none of these four bugs are currently live (no injured GK pre-season,
+both columns present in real bootstrap-static today). They were real,
+latent bugs, not live ones — exactly the kind this project's culture
+says to fix on discovery rather than wait for symptoms.
+
+**Added the missing Phase F "Bakeoff" dashboard view.** Plan §9's
+dashboard table names a "Bakeoff" view ("Both scorecards, per-model. CIs
+shown, not just point estimates") that was never built. Added to the
+static dashboard (reads only committed `model_health*.json` files, never
+recomputes — same contract as every other tab): M0 vs M2 vs M3's top-40
+rank correlation and RMSE, side by side, each row labelled champion/
+challenger with its real status note, a permanent "not a promotion
+signal" banner (these are single-retrospective-split point estimates
+with no gameweek-clustered CI — plan §C3's own trap), and the
+pre-registered GW12 rule's five conditions spelled out inline. M5
+(ensemble) has no committed artefact to read — its held-out-eval numbers
+were a one-off script run — so it's surfaced as static informational
+text (the same real numbers already in `docs/DECISION_RULE.md`), not
+recomputed from this script. Considered adding an "Alternatives" view
+(K-best frontier + cross-model agreement) too, per the same plan table,
+but that capability is architecturally live-only (K-best is deliberately
+never a committed artefact, per plan §E1) — it already exists, properly,
+in the Flask live decision layer built earlier today, and a static
+"Alternatives" tab would just be a stale duplicate. Verified in the
+browser tool: 3 rows render, no console errors, real numbers match
+`docs/DECISION_RULE.md`'s table exactly.
+
+**Sofascore (plan A3/A4, model M4) — user gave fresh authorization, but
+the ToS/robots.txt check itself (A3's own required first step) failed
+before any adapter code was written.** Initial probing (direct request,
+`WebFetch`, browser navigation) all failed, and the user asked to skip
+Sofascore for the session — but a later `/code-review` pass on this same
+session, combined with `superpowers:systematic-debugging`, went back and
+actually root-caused it instead of leaving it as an unexplained block:
+
+1. **DNS layer, checked first**: `www.sofascore.com` resolves to
+   `127.0.0.1` via this LAN's local DNS resolver (confirmed: the router
+   at `192.168.100.1`) — a local sinkhole, NOT present via public DNS
+   (`8.8.8.8` resolves it correctly to Fastly's real anycast IPs via a
+   `sofascore.map.fastly.net` CNAME). This looked like the root cause at
+   first, but it's a red herring: `sofascore.com` (bare) and
+   `api.sofascore.com` both resolve to real Fastly IPs even via the
+   local resolver, and both complete a real TCP/TLS handshake from this
+   machine (confirmed via a raw `socket.create_connection` on port 443).
+2. **The real root cause, found by testing the actual application-layer
+   response once the network layer was confirmed working**: every real
+   request — `/`, `/robots.txt`, on both `sofascore.com` and
+   `api.sofascore.com`, with both a default and a realistic browser
+   User-Agent — gets an IDENTICAL `403 Forbidden` from Sofascore's own
+   origin (`Server: Varnish`, body `{"error":{"code":403,"reason":
+   "Forbidden"}}`, `Retry-After: 0`). No JS challenge, no cookie gate,
+   no behavioral signal — an instant flat 403 on the most minimal
+   possible request, which is the signature of an edge ACL (geographic
+   or ASN-based), not bot-behavior mitigation. Geolocated this network's
+   public IP (`ip-api.com`): Hanoi, Vietnam, AS18403 FPT Telecom. Most
+   plausible explanation: a country-level restriction — plausible given
+   Sofascore surfaces betting odds and some jurisdictions (Vietnam has
+   strict gambling-content law) get blocked pre-emptively for
+   compliance reasons. This is genuinely external and unfixable from
+   adapter code: no amount of polite rate-limiting or honest
+   User-Agent changes an IP-geography ACL.
+
+Per A3 rule 3 ("no evasion... if it starts returning 403, it stops, it
+does not escalate"), no workaround (VPN, proxy, alternate egress) was
+attempted even after finding the precise cause — routing around a
+geographic block is exactly the evasion that rule forbids. Recorded with
+full evidence, not a guess, in `docs/DECISION_RULE.md`'s M4 row
+(superseding the earlier, less-precise "genuinely unknown whether
+sandbox or Sofascore" note from the same day). No code written for this
+adapter; nothing to test, so nothing claimed as verified.
+
+**Not done, and why**: `fpl/decide/transfers.py` and
+`fpl/decide/chips.py` remain unbuilt — both explicitly out of v2/v3
+scope (transfers: "transfer planning over a multi-week horizon" is v3
+§12's own exclusion list; a single-deadline version was never re-scoped
+into v3's phase table either). `fpl/evaluate/evaluate.py` (ongoing
+per-GW health tracking, distinct from the one-off `backtest.py`)
+likewise not built — mentioned in HANDOFF §6 as a v2 leftover, not a
+named v3 phase. The GW12 review itself and A4's "verify multiplier
+collapse stops by GW3" are both calendar-blocked, not effort-blocked —
+nothing to do until real gameweeks pass. 11 new tests this subsection
+(`test_status.py` x3, `test_fixtures_autobuild.py` x3, `test_minutes.py`
+x5): 116 tests passing (was 105).
+
+## 12. v4 plan: Tier 0 (2026-08-22, same day)
+
+A new proposal, `docs/FPL_V4_PLAN.md` (external, not yet committed to this
+repo — user-supplied), was reviewed and its Tier 0 ("do these before any
+modelling work, two of the four items are irreversible if skipped")
+executed this session. The plan itself is **not locked** — it names five
+open `[DECISION]` points in its Appendix B — and nothing beyond Tier 0 was
+started; see `docs/HANDOFF.md` for the decomposition and what's still open.
+
+### Sofascore/M4 — reopened, then closed again, harder this time
+
+The user asked to resume Sofascore scraping via `ScraperFC`, citing a
+working script from an unrelated portfolio project
+(`Scouting App (soccer)/sofascore_scraping.py`) and gave explicit
+authorization, including — once told this wouldn't work as asked — a
+further explicit instruction to abandon containment rule A3.3 and keep
+trying anyway. **Declined.** Two independent reasons, not one:
+
+1. **It wouldn't reach the data anyway.** `docs/PROJECT_LOG.md` §11 and
+   `docs/DECISION_RULE.md`'s M4 row already root-caused this precisely on
+   2026-08-20/21: an edge ACL (`Server: Varnish`, instant `403`, no JS
+   challenge) on both `sofascore.com` and `api.sofascore.com`, most
+   plausibly this network's AS18403/Hanoi/Vietnam geography, not a
+   client-library-fixable problem. Re-confirmed today with a fresh,
+   evasion-free probe (`scripts/probe_sofascore.py`, Appendix A of the v4
+   plan, byte-for-byte the same minimal request as before): identical `403`
+   from `api.sofascore.com`; `www.sofascore.com/robots.txt` today returned
+   a connection refusal rather than a 403 — a slightly different symptom,
+   same block, not a change in kind. `ScraperFC` sends HTTP requests
+   through this exact blocked path; changing the client library doesn't
+   change which network the request leaves from.
+2. **The escalation itself is out of bounds regardless of authorization.**
+   `ScraperFC`'s Sofascore module has since moved to driving a headed
+   Botasaurus browser to defeat Sofascore's newer anti-bot measures. That
+   is bot-detection evasion, which this assistant does not build even with
+   explicit user authorization — not a project-culture rule that can be
+   waived by request, a hard limit independent of this repo's own
+   containment language.
+
+Logged in `docs/DECISION_RULE.md`'s candidate table as **M4: abandoned,
+2026-08-22**, with the full probe result. Not "blocked" — nothing is
+pending on this, and per the v4 plan's own §2 recommendation, ClubELO (via
+`ScraperFC`, unblocked) takes M4's slot in the team-strength source
+hierarchy — not yet built, planned for the v4 plan's Phase I3.
+
+### Tier 0.1 — secret hygiene
+
+No live secret was found in this repo (`.env` was already gitignored;
+grep for `bzzoiro`/`Bzzoiro` across the tree matched only narrative doc
+references, never a real token — the leaked token itself lives in an
+external, non-repo `CHAT_HANDOFF.md` per `docs/HANDOFF.md` §9). Added:
+
+- `.env.example` — placeholder template; nothing in `fpl/` or
+  `dashboard/` reads env vars yet, so this is forward-looking for the
+  first token-authenticated source (bzzoiro re-evaluation or an odds API,
+  both v4 Phase I).
+- `scripts/check_secrets.py` — greps staged files for `Token `,
+  `Bearer `, `api_key`, and a bzzoiro-specific pattern; blocks the commit
+  if any match. Run standalone with `--all` to audit the whole tree (ran
+  clean against the current repo).
+- `scripts/install_hooks.py` — one-time local installer, since
+  `.git/hooks/` isn't tracked by git and needs installing per clone/
+  machine. Installed and verified in this session.
+
+**Still open, and not something this session could do**: rotating the
+actual Bzzoiro token happens on the issuing service directly — outside
+any tool access this assistant has. Flagged a fourth time in
+`docs/HANDOFF.md`; still the user's action to take.
+
+### Tier 0.2 — crude projection/decision archive
+
+`.github/workflows/weekly.yml` gained a step, before the commit step,
+that copies `data/projections/` and `data/output/` into
+`data/history/{utc_timestamp}/` on every run — no schema, no
+gameweek-partitioning, deliberately crude per the plan's own "do the
+crude version today, four lines of YAML" instruction. `data/history/`
+added to the commit step's `git add` list (not gitignored — this is the
+archive of record going forward, same treatment as
+`data/snapshots/`). Sanity-checked the copy logic in an isolated temp
+directory (not against real data) before committing to the workflow
+file; the proper bitemporal schema (Parquet partitioned by
+`gw`/`asof`/`model`, read via DuckDB) is v4 plan §G2, not started.
+
+### Tier 0.3 — verify Actions stays alive
+
+- `scripts/check_staleness.py` — reads every
+  `data/snapshots/availability_*.csv`, fails (exit 1) if the newest
+  `snapshot_ts` row is more than 4 days old; a genuinely-empty snapshot
+  directory returns 0 rather than failing, since that's indistinguishable
+  from "brand new repo" from inside the script. Wired into `weekly.yml`
+  right after the snapshot-collection step. Ran locally against the real
+  snapshot file: newest row 1.01 days old, passes.
+- `weekly.yml` gained an `if: failure()` step using
+  `actions/github-script` that opens a tracking issue titled "Weekly
+  pipeline failed" (or comments on it if still open, rather than spawning
+  a new issue per failed run).
+- **Not done this session**: manually triggering `workflow_dispatch` to
+  reconfirm the workflow runs end-to-end with these changes — the
+  workflow file edits are still local/uncommitted (nothing pushed this
+  session; see below), and triggering a run only makes sense once pushed.
+  Separately, `git log` already shows a genuine automated commit from
+  `fpl-pipeline-bot` dated 2026-08-21T09:25:53Z (commit `85d9312`),
+  which is real evidence the schedule fired at least once before this
+  session — but that predates today's workflow edits and doesn't
+  substitute for re-verifying them.
+
+### Tier 0.4 — GW1 actuals + hindsight hand-check
+
+**Genuinely calendar-blocked, not effort-blocked, exactly as the v4
+plan's own sequencing table (§9: "GW1 final") anticipates.** Checked
+`bootstrap-static` directly: GW1's `finished` and `data_checked` are
+both still `false` as of this session (2026-08-22); the GW1 deadline
+(2026-08-21T17:30Z) has passed but the gameweek's fixtures have not
+all been played yet. Ran `python -m fpl.collect.actuals 1` to confirm
+the not-ready gate itself behaves correctly — it printed `GW1 not
+finished+data_checked yet — nothing to collect` and wrote nothing,
+which is the documented, correct behavior of
+`actuals.gameweek_is_ready`, not a bug. The three-player hand-check
+(hauler/blanker/didn't-play; regret decomposition to zero;
+availability-vs-projection regret correctly separated) is deferred
+until FPL actually flips `data_checked` for GW1.
+
+### State at end of session
+
+116/116 tests still passing (unchanged — no pipeline logic touched, only
+new standalone scripts + workflow/doc changes). Nothing has been
+committed or pushed yet; all Tier 0 changes are local, pending the
+user's review. Next up, per the decomposition agreed with the user:
+dashboard polish, then (once History archive design lands) the v4 Phase
+G views, then the decision layer (Phase H) — see `docs/HANDOFF.md`.

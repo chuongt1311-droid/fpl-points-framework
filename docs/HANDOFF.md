@@ -1,5 +1,106 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-08-22, later (v4 plan proposed; Tier 0 executed;
+Sofascore/M4 closed permanently):** A new proposal, `docs/FPL_V4_PLAN.md`
+(external/user-supplied, not committed here, **not locked** — five open
+`[DECISION]` points in its Appendix B), picks up where the entry below
+stops. Its Tier 0 ("do these before any modelling work") is done this
+session — see `docs/PROJECT_LOG.md` §12 for full detail:
+
+- **M4/Sofascore: closed, permanently, not just for today.** User asked to
+  resume it via `ScraperFC` and, once told the block was the same one
+  already root-caused on 2026-08-20/21, explicitly asked to abandon
+  containment rule A3.3 and keep trying. Declined — re-confirmed the same
+  edge-ACL block with a fresh evasion-free probe
+  (`scripts/probe_sofascore.py`), and separately, `ScraperFC`'s Sofascore
+  module now requires driving a headed anti-bot-evasion browser, which
+  this assistant won't build regardless of authorization. Logged in
+  `docs/DECISION_RULE.md`'s M4 row as **abandoned**. ClubELO (via
+  `ScraperFC`, unblocked) is the named replacement in the team-strength
+  hierarchy — not yet built (v4 plan Phase I3).
+- Added `.env.example`, `scripts/check_secrets.py` (pre-commit secret
+  scan, clean against the current repo), `scripts/install_hooks.py`
+  (one-time local hook installer — installed and verified this session).
+  **The actual Bzzoiro token rotation is still not done** — it's on the
+  issuing service directly, outside any tool access available here;
+  flagged a fourth time.
+- `.github/workflows/weekly.yml`: added a crude, unschema'd projection/
+  decision archive step (`data/history/{utc_timestamp}/`, copies
+  `data/projections` + `data/output`, never overwrites a prior run) so
+  the overwrite-every-run data loss stops accumulating before the real
+  bitemporal schema (v4 plan §G2) gets designed; added
+  `scripts/check_staleness.py` (fails the job if the newest availability
+  snapshot row is >4 days old) and a failure-notification step that
+  opens/reuses a single tracking GitHub issue. **Not done: manually
+  triggering `workflow_dispatch` to verify these changes end-to-end** —
+  nothing from this session is pushed yet, so there's nothing on the
+  default branch to trigger against.
+- **GW1 actuals + hindsight hand-check (Tier 0.4): genuinely
+  calendar-blocked, not started.** `bootstrap-static`'s GW1
+  `finished`/`data_checked` are both still `false` as of this session —
+  confirmed directly, and `fpl.collect.actuals`'s not-ready gate behaves
+  correctly (no-ops cleanly). Revisit once GW1 actually finalizes.
+- 116/116 tests still passing — no pipeline logic touched this session,
+  only new standalone scripts plus workflow/doc changes. **Nothing
+  committed or pushed yet** — all of the above is local, pending review.
+- **Next, per the decomposition agreed with the user**: dashboard polish,
+  then (once the history-archive design lands) the v4 Phase G dashboard
+  views, then the decision layer (Phase H — the plan's #1-ranked gap:
+  `fpl/decide/transfers.py` still doesn't exist). Four of the v4 plan's
+  five Appendix B decisions remain genuinely open — storage engine
+  (Parquet+DuckDB vs SQLite), the FPL-auth approach for real squad
+  ingestion, phase ordering, and public-vs-private dashboard — ask the
+  user before committing to any of them.
+
+**Status as of 2026-08-22 (dashboard visual overhaul + Flask live decision
+layer + a real kbest what-if bug fix):** `dashboard/template.html` (and
+regenerated `index.html`) got a visual redesign — validated chart
+palette (dataviz skill; the old one FAILED against the real dark
+surface), true SVG pitch markings, hero KPI treatment, hover tooltips,
+and a corrected `known_limitations` list (three stale entries referenced
+already-dissolved v2/v3 findings). The live decision layer gained a
+Flask edition (`dashboard/live_server.py` + `dashboard/live/index.html`)
+alongside the existing Streamlit one (`app.py`, kept as legacy) — same
+FROZEN/LIVE boundary and EXPLORATORY/pinned-canonical/solve-logging
+guardrails, a purpose-built control-panel UI instead of Streamlit's
+widget chrome, sharing one now-framework-agnostic `live_data.py`. Run the
+new one: `.venv\Scripts\python.exe -m dashboard.live_server`, then open
+http://127.0.0.1:5000/. **Real bug caught and fixed**:
+`kbest.find_k_best_squads` never accepted the six what-if params
+(`locked_ids`/`banned_ids`/`banned_clubs`/`budget_override`/
+`force_formation`/`chip`) that `optimise_squad` supports — the entire
+Streamlit sidebar was silently inert for K-best squad search, every
+constrained solve quietly returning the unconstrained frontier. Fixed,
+regression-tested, verified end-to-end (locked player + forced formation
+both genuinely enforced in the live Flask app). See PROJECT_LOG §11's
+newest subsection for the full story. 105 tests passing (was 103).
+
+**Status as of 2026-08-22, continued (closed out §5's remaining open
+bugs + added the Bakeoff dashboard view + a blocked Sofascore attempt):**
+Fixed the four still-open findings from §5 below — GK backup
+re-promotion (#3), `fixtures.parquet`'s missing auto-build path (#5),
+`minutes.py`'s hard column select (#6), and the hardcoded status set now
+centralised in a new `fpl/status.py` (#10) — all regression-tested,
+`minutes.py` in particular had NO test file before this (now
+`tests/test_minutes.py`). Re-ran `fpl.decide.optimiser` against real
+data afterward: byte-identical GW1 output, confirming zero regression
+(none of these bugs are currently live — no GK is injured pre-season,
+both columns are present today — they were latent). Added the
+`docs/FPL_V3_PLAN.md` §9 Phase F "Bakeoff" view to the static dashboard
+(`dashboard/template.html`, `scripts/build_dashboard_data.py`) — M0 vs
+M2 vs M3's top-40 rank correlation and RMSE side by side, reading only
+committed `model_health*.json` files, with the pre-registered GW12 rule
+and an honest "not a promotion signal" banner. **Sofascore (plan A3/A4,
+M4): user gave fresh authorization, but the adapter was never written**
+— `sofascore.com` was unreachable from this execution environment at
+every access path tried (direct request, proxied fetch, browser
+navigation), blocked at `robots.txt` itself, the most minimal possible
+request. Per A3's own "no evasion, stops at 403, does not escalate"
+rule, no workaround was attempted. Genuinely unknown whether this is
+Sofascore's edge or this environment's own egress policy — see
+`docs/DECISION_RULE.md`'s M4 row and PROJECT_LOG §11 for the full
+finding. 116 tests passing (was 105).
+
 **Status as of 2026-08-21 (v3 plan started — Phase 0 verified, A0/A1/A2/A5
 + B2/B3/B5 + C1/C2 + C5 + D + E done):**
 **Phase E (live Streamlit decision layer) is built and verified
@@ -108,6 +209,7 @@ they are, what's been verified and how, and what to watch out for.
 ## 1. What exists right now
 
 ```
+fpl/status.py                   shared UNAVAILABLE_STATUSES constant (HANDOFF §5 finding #10, fixed)
 fpl/collect/fpl_client.py       live FPL API — bootstrap-static, fixtures, element-summary, event-live
 fpl/collect/history_loader.py   vaastav archive — 3 historical seasons
 fpl/transform/build_players.py  raw bootstrap -> one row per player
@@ -126,8 +228,10 @@ fpl/collect/sources/understat.py v3 spec §A2 -- Understat adapter (see robots.t
 fpl/project/identity_multi.py   v3 spec §A5 -- cross-source identity bridge (FPL code <-> Understat id)
 fpl/project/understat_blend.py  v3 spec §B3 -- model M3, npxG blend (does NOT currently beat M2 -- see PROJECT_LOG §11)
 fpl/evaluate/ensemble.py        v3 spec §B5 -- model M5, out-of-sample weighted blend (also does NOT beat M2 alone -- see PROJECT_LOG §11)
-dashboard/app.py                v3 spec §E -- live Streamlit decision layer (what-if squad exploration)
-dashboard/live_data.py          v3 spec §E -- FROZEN-artefact loading for app.py (never recomputes the model)
+dashboard/live_server.py        v3 spec §E -- live decision layer, Flask edition (recommended -- see dashboard/README.md)
+dashboard/live/index.html       Flask edition's frontend -- what-if controls, K-best results, frontier spread
+dashboard/app.py                v3 spec §E -- live Streamlit decision layer (legacy, still works)
+dashboard/live_data.py          v3 spec §E -- FROZEN-artefact loading, framework-agnostic (shared by both live apps)
 fpl/decide/squad_state.py       data/state/squad_gw{n}.json writer — spec §3.2
 fpl/evaluate/backtest.py        RMSE/rank-corr backtest, repaired (spec §3.5) + calibration factors (§4.2)
 fpl/evaluate/hindsight.py       3 hindsight XIs + regret decomposition — spec §3.3/§3.4, untested-live (no GW finished)
@@ -357,30 +461,33 @@ next. Full detail in each finding's failure scenario (surfaced via
    2026-08-20** by spec §4.1's shrinkage (see §4b below) — the binary gate
    this bug lived in doesn't exist any more, so there's no boundary left
    for a thin-history player to escape through.
-3. **`fpl/project/minutes.py:140` — GK backup override never re-promotes
-   the backup when the price-designated #1 gets injured.** `status`-driven
-   zeroing runs first and correctly zeroes an injured #1's own factor, but
-   `apply_gk_backup_override` picks "#1" from a static price ranking with
-   no re-check — the actual new starter stays clipped at 0.02. **Still
-   open** — spec §5.4 names this as its fallback fix if the (not-yet-built)
-   learned availability model's gate fails; until then it needs an
-   explicit re-rank-after-zeroing fix.
+3. ~~`fpl/project/minutes.py:140` — GK backup override never re-promotes
+   the backup when the price-designated #1 gets injured.~~ **FIXED
+   2026-08-22.** `apply_gk_backup_override` now ranks each team's GKs on
+   (currently available, price, rolling_start_rate) instead of price
+   alone — availability read off `minutes_df`'s own already-status-zeroed
+   `minutes_factor`, not re-derived. An unavailable "#1" drops out of
+   contention for the slot, so the real starter is no longer clipped.
+   Regression-tested (`tests/test_minutes.py`, which also newly covers
+   this module — it had no test file before this fix).
 4. ~~`fpl/project/project.py:79` — DEFCON's confidence flag (`defcon_source`)
    is dropped before reaching the optimiser.~~ **DISSOLVED 2026-08-20** —
    spec §4.1's shrinkage applies to `defcon_rate` too (see §4b), so
    confidence is baked into the rate itself now, nothing separate to drop.
-5. **`fpl/project/fixtures.py:80` — `fixtures.parquet` has no auto-build
-   path.** Unlike every other input (`build_players`/`baseline`/`defcon`/
-   `minutes`, all self-building from raw files), `load_fixture_table()`
-   just raises `FileNotFoundError` if `fpl.transform.build_fixtures` was
-   never separately run. Breaks on a fresh checkout that only runs the two
-   COLLECT scripts.
-6. **`fpl/project/minutes.py:87` — hard column selection breaks
-   `build_players.py`'s own "keep if present" contract.** If FPL ever omits
-   `status` or `chance_of_playing_next_round`, `build_players()` degrades
-   gracefully per its docstring, but `minutes.py`'s hard `[[...]]` select
-   would `KeyError` instead — the contract is honored on the write side
-   only.
+5. ~~`fpl/project/fixtures.py:80` — `fixtures.parquet` has no auto-build
+   path.~~ **FIXED 2026-08-22.** `load_fixture_table()` now self-builds
+   from the raw `fixtures.json` via `fpl.transform.build_fixtures()` when
+   the parquet is missing — same "keep if present, build if not" contract
+   as `build_players()`. Only raises if the raw file is ALSO missing.
+   Regression-tested (`tests/test_fixtures_autobuild.py`).
+6. ~~`fpl/project/minutes.py:87` — hard column selection breaks
+   `build_players.py`'s own "keep if present" contract.~~ **FIXED
+   2026-08-22.** `compute_minutes_factor` now builds `status` /
+   `chance_of_playing_next_round` column-by-column with an explicit
+   fallback (`status` -> `"a"`, chance -> all-NaN) instead of a hard
+   `players_df[[...]]` select, so a missing column degrades the same way
+   a present-but-null value already did per-row. Regression-tested
+   (`tests/test_minutes.py`).
 7. ~~`fpl/evaluate/backtest.py:148` — zero-fills missing training rates.~~
    **FIXED 2026-08-20** — spec §3.5, see §4b below. Now shrinks toward the
    tier prior (same mechanism as live), exercising the cold-start path on
@@ -395,11 +502,11 @@ next. Full detail in each finding's failure scenario (surfaced via
    §3.5. Now imports `load_weighted_player_history`/`compute_player_rates`
    from `baseline.py` directly (restricted to the two training seasons via
    a config override), so a future formula fix propagates automatically.
-10. **Unavailable-status set `["i","s","u"]` hardcoded identically in
-    `minutes.py:107`, `project.py:119`, `optimiser.py:60`** — no shared
-    constant. (Checked against real bootstrap-static data: no additional
-    real status value is currently missed by this list — the duplication
-    itself is the risk, not a missing status today.)
+10. ~~Unavailable-status set `["i","s","u"]` hardcoded identically in
+    `minutes.py:107`, `project.py:119`, `optimiser.py:60`~~ **FIXED
+    2026-08-22.** New `fpl/status.py` — `UNAVAILABLE_STATUSES` (a
+    frozenset) + `is_unavailable()` — imported by all three call sites.
+    Regression-tested (`tests/test_status.py`).
 
 **Also flagged but not in the top-10** (lower severity / cleanup, still
 worth doing): `load_config()` copy-pasted verbatim in 9 files;

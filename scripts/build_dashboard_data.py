@@ -42,6 +42,38 @@ def main():
     squad = json.loads((OUTPUT_DIR / "gw1_recommendations.json").read_text(encoding="utf-8"))
     health = json.loads((OUTPUT_DIR / "model_health.json").read_text(encoding="utf-8"))
 
+    # ---- Bakeoff tab (v3 plan §9 Phase F, previously unbuilt) — every
+    # committed model_health*.json, read as-is. M0's own file has no
+    # suffix (the production/champion path); every challenger writes to
+    # model_health_{model}.json (fpl.evaluate.backtest's own convention).
+    # M5 (ensemble) has no committed artefact — its held-out-eval numbers
+    # were a one-off script run (see docs/DECISION_RULE.md), never
+    # written to a file this script could read — so it's surfaced as
+    # static informational text below, same "not yet computed live"
+    # honesty pattern as the Chip Planner tab, not fabricated from here.
+    champion_model = health["model"]
+    bakeoff_models = [{
+        "model": health["model"], "label": "M0 — rules_v1", "is_champion": True,
+        "status_note": "Current champion (docs/DECISION_RULE.md).",
+        "top40_rank_correlation": r2(health["top40_rank_correlation"]),
+        "overall_rmse": r2(health["overall_rmse"]),
+        "n_players_tested": health["n_players_tested"],
+    }]
+    challenger_labels = {
+        "m2_xg": ("M2 — xG blend", "Backtest-favourable, not yet live-evaluated."),
+        "m3_understat": ("M3 — Understat npxG blend", "Does not currently beat M2 at any tested k_npxg."),
+    }
+    for path in sorted(OUTPUT_DIR.glob("model_health_*.json")):
+        challenger = json.loads(path.read_text(encoding="utf-8"))
+        label, note = challenger_labels.get(challenger["model"], (challenger["model"], ""))
+        bakeoff_models.append({
+            "model": challenger["model"], "label": label, "is_champion": False,
+            "status_note": note,
+            "top40_rank_correlation": r2(challenger["top40_rank_correlation"]),
+            "overall_rmse": r2(challenger["overall_rmse"]),
+            "n_players_tested": challenger["n_players_tested"],
+        })
+
     # ---- hindsight / Week in Review (spec §3.6) — null until a gameweek
     # has actually finished; fpl.evaluate.hindsight writes this file, this
     # script only reads it, same committed-artefact contract as everything
@@ -167,15 +199,13 @@ def main():
 
     known_limitations = [
         "No BPS simulation — bonus points come from historical rate, not the 32 underlying Opta stats. Systematically under-projects bonus-magnet players.",
-        "No xG/xA regression layer — players are projected on raw output, so hot streaks are over-projected and cold streaks under-projected.",
+        "No xG/xA regression layer in the LIVE champion path — M0 rules_v1 (what this dashboard shows) projects on raw realised output, so hot streaks are over-projected and cold streaks under-projected. An xG-blended model (M2) exists and is backtest-favourable, but is not live — see the Bakeoff tab and docs/DECISION_RULE.md.",
         "New-signing cold start — players without 3 FPL appearances (or under 450 historical minutes) get a prior-only projection flagged low confidence.",
         "No price-change modelling — team value growth is not optimised for.",
         "No ownership/differential strategy — the model maximises raw points, not rank.",
         "Rotation risk is backward-looking — start probability lags a manager's actual current thinking, with no notion of fixture congestion.",
         "Set-piece duties are not explicitly modelled beyond what's implicit in historical output.",
         "FDR is derived from season-long team strength ratings, which lag genuine early-season form — GW1-5 projections are the least reliable the model will ever produce.",
-        "KNOWN UNFIXED GAP: DEFCON confidence is not surfaced separately — a player can show confidence=high overall while their DEFCON rate specifically is a tier-prior guess. See HANDOFF.md §5 item 4.",
-        "No shrinkage between confidence tiers — a player just over the 450-minute floor is trusted as much as one with years of history at that rate. See FPL_V2_DESIGN.md spec §4.1 (the 'Osula test').",
     ]
 
     payload = {
@@ -187,6 +217,19 @@ def main():
         },
         "squad": squad,
         "model_health": health,
+        "bakeoff": {
+            "champion_model": champion_model,
+            "models": bakeoff_models,
+            "ensemble_note": (
+                "M5 (ensemble, M0+M2+M3 weighted out-of-sample) has no committed "
+                "artefact to read here — its held-out-eval numbers were a one-off "
+                "script run, not a pipeline output. Reported for context, not "
+                "recomputed: on a held-out eval half, M2 alone scores 0.5966 top-40 "
+                "rank correlation; the full M0+M2+M3 ensemble scores only 0.5266, "
+                "and even an M0+M2-only ensemble scores 0.5593 — both worse than "
+                "M2 alone. See docs/DECISION_RULE.md."
+            ),
+        },
         "hindsight": hindsight,
         "known_limitations": known_limitations,
         "teams": teams,

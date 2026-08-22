@@ -1,4 +1,4 @@
-# Pre-registered champion-selection rule (v3 plan §C5 / decision D4)
+﻿# Pre-registered champion-selection rule (v3 plan §C5 / decision D4)
 
 **Written:** 2026-08-21, before the GW1 deadline (2026-08-21T17:30:00Z) has
 even passed — no GW2 data exists yet, which is the whole point. Committing
@@ -78,7 +78,8 @@ anything from it before GW12 is exactly the trap plan §C3 names.
 | M2 `xg_blend` | Built, not live-evaluated | 0.471 (also better overall RMSE: 20.663 vs 20.973) |
 | M3 `understat` | Built, **does not currently beat M2** | 0.322-0.459 across a k_npxg sweep 50-10000 — worse than M2 at every value tested. Not promoted over M2 as the lead challenger. See docs/PROJECT_LOG.md for the full sweep and the honest analysis of why (plausibly: blending an already-blended M2 rate a second time dilutes rather than sharpens, or 2+ year-old Understat npxG is a noisier predictor of a different season than FPL's own more-current xG — the same "stale personal rate" effect already documented for shrinkage.k). |
 | M5 `ensemble` | Built, **also does not currently beat M2 alone** | On a held-out eval half (weights fit on a disjoint fit half — see `fpl/evaluate/ensemble.py`): M2 alone scores 0.5966 top-40 rank corr; the M0+M2+M3 ensemble scores only 0.5266, and even an M0+M2-only ensemble scores 0.5593 — both worse than just using M2. RMSE-based weighting optimises the wrong axis (plan §C2's own trap): blending in a model that's merely "not much worse" on RMSE but clearly worse on top-40 rank correlation drags the blend's PRIMARY metric down even when it nudges RMSE marginally better. M2 remains the strongest single candidate found so far. |
-| M4 `sofascore` | **Not built** | Quarantined tier (plan D1/D2) — needs its own explicit ToS/robots.txt check and fresh user authorization before any scraping attempt, same process Understat went through (see PROJECT_LOG §11). Not attempted this session. |
+| M4 `sofascore` | **Abandoned, 2026-08-22** | Not evaluated — no adapter was written. Re-confirmed today, per `scripts/probe_sofascore.py` (plain default-UA request, no retries, no evasion): `api.sofascore.com` still returns an identical instant `403 Forbidden` from Sofascore's own origin (`Server: Varnish`, body `{"error":{"code":403,"reason":"Forbidden"}}`) — same edge-ACL signature root-caused 2026-08-20/21 (AS18403 FPT Telecom, Hanoi; most plausibly a geo-compliance block given Sofascore surfaces betting odds). `www.sofascore.com/robots.txt` today returned a connection refusal rather than a 403, consistent with the same block, not a change in kind. `docs/FPL_V4_PLAN.md` §2 independently reached the same conclusion and additionally flagged that ScraperFC's Sofascore module now drives a headed anti-bot browser to reach the same blocked host — an escalation past containment rule A3.3 ("no evasion... it stops, it does not escalate"), not a lesser one. Per that rule, no workaround was attempted. Closed as **abandoned**, not blocked — nothing pending on this. `docs/FPL_V4_PLAN.md` §2 names ClubELO (via ScraperFC, unblocked) as its replacement in the team-strength source hierarchy. |
+|
 
 M2's backtest numbers are directionally favourable but this is a single
 retrospective split against a different season (plan's own documented
@@ -87,5 +88,7 @@ carries no gameweek-clustered CI. It is exactly the kind of pre-GW12
 signal condition 1 above says not to act on. M2 stays a bakeoff candidate,
 not a champion, until real GW1-11 data clears the rule above.
 
-Models not yet built (M3 Understat, M4 Sofascore, M5 ensemble) have no row
-here — they can't be evaluated until they exist.
+Models not yet built (M3 Understat, M5 ensemble) have no live-evaluated row
+here — they can't be evaluated until real GW data exists. M4 (Sofascore) is
+closed permanently — see its row above — and will not get one.
+

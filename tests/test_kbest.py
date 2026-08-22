@@ -110,6 +110,41 @@ def test_rank_1_squad_matches_the_unconstrained_optimum():
     assert set(k_best[0]["squad"]) == set(single_best["squad"])
 
 
+def test_find_k_best_squads_forwards_locked_ids_to_every_solve():
+    """Real bug regression: find_k_best_squads used to accept only
+    (players, config, k, diversity_d, apply_availability_filters) and
+    silently dropped locked_ids/banned_ids/banned_clubs/budget_override/
+    force_formation/chip — the live decision layer's entire what-if
+    sidebar was inert for K-best squad search, every 'what-if' solve
+    quietly returning the unconstrained frontier instead. A locked
+    player must now appear in EVERY returned squad, not just be ignored."""
+    pool = _diverse_pool()
+    worst_fwd_id = int(pool[pool["position"] == "FWD"]["id"].max())
+    unconstrained = kbest.find_k_best_squads(pool, CONFIG, k=1, diversity_d=3)
+    assert worst_fwd_id not in unconstrained[0]["squad"]  # confirms it's a real constraint, not a no-op
+
+    results = kbest.find_k_best_squads(
+        pool, CONFIG, k=3, diversity_d=3, locked_ids=[worst_fwd_id],
+    )
+    assert len(results) >= 1
+    for r in results:
+        assert worst_fwd_id in r["squad"]
+
+
+def test_find_k_best_squads_forwards_banned_ids_to_every_solve():
+    pool = _diverse_pool()
+    best_fwd_id = int(pool[pool["position"] == "FWD"]["id"].min())
+    unconstrained = kbest.find_k_best_squads(pool, CONFIG, k=1, diversity_d=3)
+    assert best_fwd_id in unconstrained[0]["squad"]  # confirms it's a real constraint, not a no-op
+
+    results = kbest.find_k_best_squads(
+        pool, CONFIG, k=3, diversity_d=3, banned_ids=[best_fwd_id],
+    )
+    assert len(results) >= 1
+    for r in results:
+        assert best_fwd_id not in r["squad"]
+
+
 def test_find_k_best_xis_frontier_is_monotonically_non_increasing():
     pool = _diverse_pool()
     from fpl.decide import optimiser as opt_mod

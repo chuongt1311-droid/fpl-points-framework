@@ -56,6 +56,14 @@ jobs:
       - name: Collect — availability snapshot
         run: python -m fpl.collect.snapshot
 
+      # v4 plan §3.3 (Tier 0.3): the availability snapshot is the one
+      # append-only, irreversible artefact this project cares most about
+      # not silently losing. A failed Actions run is an email that's easy
+      # to learn to ignore; this makes staleness fail the JOB loudly
+      # instead, so a dead pipeline can't go unnoticed for weeks.
+      - name: Assert availability snapshot isn't stale
+        run: python scripts/check_staleness.py
+
       - name: Transform — players + fixtures tables
         run: |
           python -m fpl.transform.build_players
@@ -77,14 +85,65 @@ jobs:
         env:
           PYTHONPATH: "."
 
+      # v4 plan §3.4/§4 (Tier 0.4, "do the crude version today"): every run
+      # up to now has overwritten data/projections + data/output in place,
+      # permanently losing the previous run's revision. This is the
+      # deliberately crude stopgap — a straight timestamped copy, no schema,
+      # no partitioning by gameweek — so nothing more is lost while the
+      # proper bitemporal archive (v4 plan §G2: Parquet + DuckDB) gets
+      # designed. Never overwrites a prior archive directory (append-only,
+      # same rule as the availability snapshot itself).
+      - name: Archive this run's projections + decisions (crude, pre-schema)
+        run: |
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          dest="data/history/${ts}"
+          mkdir -p "$dest"
+          [ -d data/projections ] && cp -r data/projections "$dest/projections"
+          [ -d data/output ] && cp -r data/output "$dest/output"
+          echo "Archived run to $dest"
+
       - name: Commit + push regenerated artefacts
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots dashboard/data.json dashboard/index.html
+          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/index.html
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else
             git commit -m "chore: automated pipeline run ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
             git push
           fi
+
+      # v4 plan §3.3 (Tier 0.3): silent failure is the actual risk here,
+      # not failure itself — an Actions failure email is easy to tune out.
+      # Opens (or comments on, if still open) a single tracking issue rather
+      # than one new issue per failed run.
+      - name: Notify on failure (open/update a tracking issue)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Weekly pipeline failed";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `The scheduled/dispatched run at ${new Date().toISOString()} failed.\n\nRun: ${runUrl}`;
+            const openIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+            const existing = openIssues.data.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
