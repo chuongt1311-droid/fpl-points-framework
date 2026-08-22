@@ -34,7 +34,40 @@
     "captain": 411,
     "vice_captain": 428
   },
-  "played": null,
+  "played": {
+    "squad": [
+      1,
+      154,
+      165,
+      180,
+      212,
+      335,
+      367,
+      387,
+      388,
+      411,
+      428,
+      465,
+      497,
+      508,
+      533
+    ],
+    "starting_xi": [
+      1,
+      154,
+      165,
+      335,
+      367,
+      387,
+      388,
+      411,
+      428,
+      465,
+      533
+    ],
+    "captain": 411,
+    "vice_captain": 428
+  },
   "bank": 0.0,
   "free_transfers": 1,
   "transfers_made": [],

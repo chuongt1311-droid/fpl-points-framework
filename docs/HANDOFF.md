@@ -1,6 +1,39 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-22, latest (Phase G history layer built — branch
+**Status as of 2026-08-22, latest (Phase H H3a+H3b — the transfer
+decision layer):** The tool now answers the weekly question it always
+claimed to: *"I own these 15, I have N free transfers and £X in the bank
+— what do I do?"* New: `fpl/decide/constraints.py` (shared MILP builders,
+extracted from `optimise_squad` behind a byte-identical gate),
+`fpl/decide/transfers.py` (the solve + artefact + CLI), real-team
+ingestion in `squad_state.py`, and `scripts/my_team_instructions.py`.
+Archive extended to capture transfer recommendations. **193 tests
+passing** (was 162). Full detail in `docs/PROJECT_LOG.md` §16; spec and
+plan under `docs/superpowers/`.
+
+**Four things to know before touching this:**
+- **`config.yaml` now carries `fpl.entry_id: 6669718`** — public (it's in
+  the Points page URL), not a secret.
+- **Sell prices and free transfers come from a pasted, gitignored
+  `data/private/my_team.json`.** No FPL credential is stored, requested
+  or handled anywhere. Run `scripts/my_team_instructions.py` for the
+  exact steps. The solver refuses a file older than 24h.
+- **A squad mismatch between that file and the public endpoint STOPS the
+  solve**; a bank mismatch does not (it legitimately means "already
+  transferred this week"). That asymmetry is deliberate.
+- **The transfer objective is the 5-GW weighted horizon with the hit
+  charged once**, not the v4 plan's literal single-gameweek version,
+  which would have been systematically hit-averse. Both gains are always
+  reported.
+
+**Known limitation, surfaced in the artefact itself:** a single-deadline
+solve values an unused free transfer at zero, so it will spend one for
+any positive gain — the real-data run recommended Guéhi → Matheus N. for
+just **+0.18** weighted points. Low-gain recommendations now carry an
+explicit `caveats` entry saying rolling is likely at least as good.
+Pricing an unspent FT is what H3c adds.
+
+**Status as of 2026-08-22, earlier (Phase G history layer built — branch
 `phase-g-history-layer`):** Tier 0.2's crude timestamped copy is now a
 real bitemporal, append-only, provenance-stamped archive:
 `fpl/history/` (`paths` / `provenance` / `archive` / `manifest` /
@@ -674,6 +707,17 @@ throughout this file and the code's comments point into it.
 
 ## 9. Not yet done
 
+- **`fpl/decide/transfers.py` is NOT wired into `weekly.yml`.** Its
+  recommendation must be hand-verified as executable in the real game for
+  **two gameweeks** first — the right player, an affordable price, a legal
+  squad afterwards. Calendar-bound, not effort-bound. Run it manually:
+  `.venv\Scripts\python.exe -m fpl.decide.transfers` (needs a fresh
+  `data/private/my_team.json`).
+- **H3c (multi-period: FT carry, bank valuation, terminal state, HiGHS)
+  and H3d (chips)** — deliberately out of scope. H3c's own gate is
+  "reproduces H3b exactly at w=1 with decay disabled", which needs H3b
+  finished and trusted. H3c is also what fixes the unused-free-transfer
+  valuation noted above.
 - **Three Phase G dashboard views deliberately deferred to GW3+**:
   Timeline (season-long cumulative points/regret), Decision trail (what
   was recommended at each of the four weekly touchpoints vs. what was

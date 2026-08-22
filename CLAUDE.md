@@ -64,6 +64,7 @@ fpl/collect/          live FPL API + vaastav historical archive + source adapter
 fpl/transform/        raw -> one row per player / fixture table + DGW/BGW detection
 fpl/project/          per-90 rates -> fixture multipliers -> availability -> xPts(p,g)   [PROJECT layer]
 fpl/decide/           MILP squad + XI + captain (PuLP), K-best with diversity            [DECIDE layer]
+                      + constraints.py (shared MILP builders) + transfers.py (real-squad transfer solve)
 fpl/evaluate/         backtest (one-off retrospective), hindsight (post-GW regret)
 fpl/history/          bitemporal append-only archive of every run + DuckDB read model  [HISTORY layer]
 dashboard/            two static views + two live decision-layer apps (see below)
@@ -192,9 +193,14 @@ dropped its own constraints). The working norm, visible throughout
 - `dashboard/live_server.py`: an unrecognized `force_formation` value
   silently solves unconstrained instead of erroring; captain/vice are
   matched to squad rows by `web_name` string instead of `id`.
-- `fpl/decide/transfers.py`, `fpl/decide/chips.py`,
-  `fpl/evaluate/evaluate.py` — not built, explicitly out of scope for
-  v2/v3 as written.
+- `fpl/decide/transfers.py` — **built (Phase H, 2026-08-22)**, but NOT
+  wired into `weekly.yml`: its recommendation needs hand-verifying as
+  executable in the real game for two gameweeks first. Run manually with
+  `-m fpl.decide.transfers`. Known limitation, surfaced in its own output:
+  a single-deadline solve values an unused free transfer at zero, so it
+  spends one for any positive gain — H3c fixes that.
+- `fpl/decide/chips.py`, `fpl/evaluate/evaluate.py` — not built,
+  explicitly out of scope for v2/v3 as written.
 - Sofascore (M4) — **abandoned permanently, not just blocked.** Root-caused
   twice (2026-08-20/21, and reconfirmed 2026-08-22): an edge ACL returns
   an identical 403 from Sofascore's own origin on both `sofascore.com`
