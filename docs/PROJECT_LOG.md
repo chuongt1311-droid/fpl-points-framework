@@ -1568,3 +1568,146 @@ compute-and-save wrapper in each of `build_players.py`/`baseline.py`/
 `defcon.py`, or having `build_dashboard_data.py` read the already-
 persisted `data/processed/*.parquet` directly instead of recomputing
 inputs from raw. Flagged as a background task rather than fixed here.
+
+## 14. Phase G — the history layer (2026-08-22, same day, branch `phase-g-history-layer`)
+
+Built to `docs/superpowers/specs/2026-08-22-history-layer-design.md`, via
+`docs/superpowers/plans/2026-08-22-history-layer.md`. Turns Tier 0.2's
+crude timestamped copy into a real bitemporal, append-only,
+provenance-stamped archive with a DuckDB read model and two dashboard
+views. 162 tests passing (was 116 at the start of the day).
+
+### What was built
+
+`fpl/history/` — five modules, strict write/read split, and nothing in
+the package imports from `fpl/project/` or `fpl/decide/`:
+
+- `paths.py` — the ONE source of truth for the partition layout. Separate
+  because four call sites build these paths (archive, query, manifest,
+  migration); this repo has already been bitten by a shared helper that
+  call sites did not actually call (`fpl/status.py`, HANDOFF §5 #10).
+- `provenance.py` — run metadata. `config_sha256` is what distinguishes a
+  real projection revision from a `config.yaml` parameter changed on a
+  Wednesday; `git_dirty` is recorded because a local run with uncommitted
+  changes is not reproducible from its SHA alone. Unknowable fields are
+  `None`, never guessed.
+- `archive.py` — the write path. Refuses to overwrite a partition.
+- `manifest.py` — derived index, gitignored.
+- `query.py` — read-only DuckDB view layer.
+
+Plus `scripts/migrate_crude_archive.py`, `scripts/build_history_data.py`,
+the `weekly.yml` rewire, and a History tab on the static dashboard.
+
+### Three deliberate deviations from `docs/FPL_V4_PLAN.md` §4
+
+1. **`asof` uses ISO 8601 BASIC (`20260822T125314Z`), not the plan's
+   `{utc_iso}`.** ISO extended contains colons, which Windows forbids in
+   path names — verified empirically before writing a line of it
+   (`OSError: The filename, directory name, or volume label syntax is
+   incorrect`). The plan as literally written is unimplementable on this
+   machine. Basic format is also lexicographically sortable, so
+   `ORDER BY asof` is chronological without parsing. Decided before any
+   partition was written, because partitions are immutable.
+2. **`manifest.json` is derived and gitignored, not committed.** A single
+   file every scheduled run rewrites, committed by a bot on four crons a
+   week, is exactly the merge-conflict generator the plan itself cites
+   when rejecting SQLite. The immutable per-run `run.json` files are the
+   source of truth; the manifest is a pure function of them.
+3. **`run.json` is written LAST, as a completion marker.** A run that dies
+   mid-write leaves partitions with no marker; the query layer excludes
+   them. Chosen over idempotency-keyed-on-run-id because a retried run
+   genuinely observed the data at a *different* time — recording it as a
+   duplicate of the first attempt would fabricate a revision that never
+   happened.
+
+### Two things the spec added that the plan did not have
+
+- **The `id`-to-`code` sidecar.** Archived projections carry `id` but not
+  `code`, and `id` is not stable across seasons (`identity.py`'s rule —
+  CLAUDE.md's "one fact that breaks everything"). Rather than mutating the
+  archived artefact (which would break the fidelity rule), each run writes
+  `_runs/asof={ts}/id_code_map.parquet`, joined automatically by every
+  public view. This is the identity-mapping bug class caught in design
+  rather than in production.
+- **`gw` vs `event`, documented and tested.** `gw={n}` is the gameweek a
+  run was *targeting*; `event` is the gameweek a row's xPts is *for*. A
+  projections artefact spans the 5-GW horizon (the GW1 parquet is 3000
+  rows = 600 players x 5 events), so a revision series fixes `event` and
+  spans MULTIPLE `gw` partitions. `revisions()` is keyed on `event`
+  accordingly, with its own explicit test. This is the easiest thing in
+  the design to get backwards.
+
+### Three real bugs, all found by running against real data or a real browser
+
+None of these were caught by the unit tests, which were green throughout.
+
+1. **An apostrophe in the repo path broke every archive query.** The
+   Parquet glob was interpolated into SQL with an f-string, and this repo
+   lives at `D:\CT's Portfolio\FPL Pipeline` — the apostrophe terminated
+   the SQL string literal, DuckDB raised `ParserException`, and a broad
+   `except Exception` swallowed it into an empty DataFrame. So every real
+   query silently returned zero rows while `tmp_path`-based tests (no
+   apostrophe) passed. Fixed by binding parameters instead of
+   interpolating, AND by narrowing the error handling so a genuine read
+   failure surfaces instead of masquerading as an empty archive. Both
+   halves have regression tests, one with an apostrophe deliberately in
+   its `tmp_path`.
+2. **Migrated runs had no `id`-to-`code` sidecar**, so `code` came back
+   null on every migrated row — the exact identity failure the sidecar
+   exists to prevent, reintroduced through the migration path. The
+   migration now reconstructs it from the current `players.parquet`, which
+   is legitimate here and only here because `id`-to-`code` is stable
+   *within* a season, and records
+   `id_code_map: "reconstructed_from_current_season"` so the provenance is
+   explicit. A run that cannot get a map is flagged loudly.
+3. **The dashboard placeholder took down the entire page.** Written as
+   `const HISTORY = /*__HISTORY__*/null;` with `null` intended as a
+   fallback — but substitution replaces only the comment, so a real
+   payload produced `const HISTORY = {...}null;`, a syntax error that
+   killed the whole script block. `DATA` became undefined and *every* tab
+   stopped rendering. The History tab still appeared to respond, because
+   its click handler registers a few lines before the one that threw —
+   which is exactly why the browser check mattered and a "the tab works"
+   glance would not have caught it. The placeholder now stands alone and
+   the builder always substitutes, using the literal `"null"` when
+   `history.json` is absent. Two regression tests.
+
+### Migration result
+
+The single crude partition (`20260822T125314Z`, from run #3) migrated to
+7 partitions across three models, marked `provenance: "reconstructed"`
+with `config_sha256` and `git_dirty` null — not recoverable after the
+fact, and a guessed hash would make an unreproducible run look
+reproducible. Verified end-to-end through the query layer: 8990 rows,
+all three models, all 5 horizon events, every row carrying a real `code`.
+The crude directory was removed (recoverable from git history).
+
+### What the dashboard shows, and what it deliberately does not
+
+**Archive Coverage** is built for real and works with the one partition
+that exists: runs per gameweek, incomplete runs, reconstructed
+provenance. It is the panel that makes silent capture failure visible,
+which is Tier 0's entire premise.
+
+**Revision** is wired to `Archive.revisions()` for real but renders an
+honest "needs 2 completed runs within a gameweek, currently has at most
+1" state. It fills in automatically as the four weekly runs accumulate,
+with no code change.
+
+**Timeline, Decision trail, and Model drift are NOT built.** All three
+need finished actuals and several gameweeks; building them now would mean
+placeholder charts of invented shape. This repo already has the better
+convention (Chip Planner and Week in Review both state plainly what is
+missing and why), and §11 above records the same decision for a static
+"Alternatives" view. Revisit at GW3+.
+
+### Not done
+
+- The `if: failure()` notification branch in `weekly.yml` is *still*
+  unproven — the Tier 0.3 dispatch run succeeded, so it never executed.
+- `actuals/` has a defined partition path but no collector step; GW1 is
+  not final, so there is nothing to archive and nothing to test against.
+- `scripts/build_dashboard_data.py`'s silent `data/processed/*.parquet`
+  overwrite (§13) is unchanged — a background task is on it. Every
+  `index.html` regeneration in this session deliberately bypassed that
+  script via direct template substitution to avoid tripping it.
