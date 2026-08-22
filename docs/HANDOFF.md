@@ -1,6 +1,44 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-08-22, latest (dashboard polish pass — keyboard
+**Status as of 2026-08-22, latest (Phase G history layer built — branch
+`phase-g-history-layer`):** Tier 0.2's crude timestamped copy is now a
+real bitemporal, append-only, provenance-stamped archive:
+`fpl/history/` (`paths` / `provenance` / `archive` / `manifest` /
+`query`), hive-partitioned Parquet + JSON under `data/history/`, a
+read-only DuckDB query layer, a migration script, and a **History** tab
+on the static dashboard. `weekly.yml` now runs
+`python -m fpl.history.archive` immediately after Decide (moved earlier
+deliberately, so the archive is not downstream of
+`build_dashboard_data.py`'s known overwrite bug). **162 tests passing**
+(was 116 this morning). Full detail — including three deliberate
+deviations from `FPL_V4_PLAN.md` §4 and three real bugs — in
+`docs/PROJECT_LOG.md` §14. Spec: `docs/superpowers/specs/
+2026-08-22-history-layer-design.md`; plan: `docs/superpowers/plans/
+2026-08-22-history-layer.md`.
+
+**Three things worth knowing before touching this package:**
+- **`asof` is ISO 8601 BASIC (`20260822T125314Z`), not extended.** ISO
+  extended has colons, which Windows forbids in paths. Partitions are
+  immutable, so this cannot be changed later.
+- **`gw` is the gameweek a run was TARGETING; `event` is the gameweek a
+  row's xPts is FOR.** A projections artefact spans the 5-GW horizon, so
+  a revision series fixes `event` and spans multiple `gw` partitions.
+  `Archive.revisions()` is keyed on `event`. This is the easiest thing
+  here to get backwards.
+- **Never interpolate a path into DuckDB SQL — bind it.** This repo lives
+  at `D:\CT's Portfolio\...`; the apostrophe terminated a SQL string
+  literal and made every real query silently return zero rows while the
+  tests passed. Regression-tested.
+
+**Dashboard, honestly scoped:** Archive Coverage is real and useful now
+(it is what makes silent capture failure visible). Revision is wired to
+real queries but shows "needs 2 runs in a gameweek, currently 1" until
+data accumulates — it fills in by itself. Timeline, Decision trail and
+Model drift are **deliberately not built**: they need finished actuals
+and several gameweeks, and would otherwise be invented-shape
+placeholders. Revisit at GW3+.
+
+**Status as of 2026-08-22, earlier (dashboard polish pass — keyboard
 accessibility + a real Player Explorer row-count bug):** Reviewed both
 dashboards (static `dashboard/template.html` + the live Flask app's
 `dashboard/live/index.html`) — already visually cohesive from last
@@ -635,6 +673,20 @@ throughout this file and the code's comments point into it.
 
 ## 9. Not yet done
 
+- **Three Phase G dashboard views deliberately deferred to GW3+**:
+  Timeline (season-long cumulative points/regret), Decision trail (what
+  was recommended at each of the four weekly touchpoints vs. what was
+  played vs. hindsight-optimal), and Model drift (rolling top-40 rank
+  correlation per model with the GW12 threshold drawn on). All three need
+  finished actuals and several gameweeks of history; the archive that
+  feeds them now exists and is accumulating. See `docs/PROJECT_LOG.md`
+  §14.
+- **`weekly.yml`'s `if: failure()` notification branch is still
+  unproven.** Both verification runs succeeded, so that code has never
+  executed. Deliberately fail a run once (a throwaway branch with a
+  forced `exit 1`) to test it.
+- **`data/history/actuals/` has a defined partition path but no collector
+  step** — GW1 is not final, so there is nothing to archive yet.
 - **`scripts/build_dashboard_data.py` silently recomputes and overwrites
   `data/processed/*.parquet` — a real FROZEN/LIVE boundary violation,
   found 2026-08-22, not fixed.** Its own docstring claims read-only

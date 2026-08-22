@@ -248,6 +248,17 @@ def main():
     if template_path.exists():
         html = template_path.read_text(encoding="utf-8")
         html = html.replace("/*__DATA__*/", data_json)
+        # Phase G (spec §7.4): history.json is produced separately by
+        # scripts/build_history_data.py. Substituted here so index.html
+        # stays a single self-contained offline file. ALWAYS substitutes —
+        # the literal "null" when history.json is absent — because leaving
+        # the placeholder in place would emit `const HISTORY = ;`, a syntax
+        # error that takes down the whole page.
+        history_path = DASHBOARD_DIR / "history.json"
+        history_json = (
+            history_path.read_text(encoding="utf-8") if history_path.exists() else "null"
+        )
+        html = html.replace("/*__HISTORY__*/", history_json)
         index_path = DASHBOARD_DIR / "index.html"
         index_path.write_text(html, encoding="utf-8")
         print(f"Wrote {index_path} ({index_path.stat().st_size / 1024:.0f} KB)")

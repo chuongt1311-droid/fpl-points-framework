@@ -65,6 +65,7 @@ fpl/transform/        raw -> one row per player / fixture table + DGW/BGW detect
 fpl/project/          per-90 rates -> fixture multipliers -> availability -> xPts(p,g)   [PROJECT layer]
 fpl/decide/           MILP squad + XI + captain (PuLP), K-best with diversity            [DECIDE layer]
 fpl/evaluate/         backtest (one-off retrospective), hindsight (post-GW regret)
+fpl/history/          bitemporal append-only archive of every run + DuckDB read model  [HISTORY layer]
 dashboard/            two static views + two live decision-layer apps (see below)
 scripts/              one-off / regeneration scripts (never part of the model itself)
 ```
@@ -97,13 +98,37 @@ retrospective split against a *different* season with no
 gameweek-clustered CI; the decision rule exists specifically to stop
 "switch to whatever's hot this week" reasoning.
 
+## The history layer (Phase G)
+
+`fpl/history/` archives every pipeline run instead of letting each one
+overwrite the last. Spec: `docs/superpowers/specs/2026-08-22-history-layer-design.md`.
+Three rules that will bite you if you don't know them:
+
+- **`asof` is ISO 8601 BASIC (`20260822T125314Z`)** — ISO extended's
+  colons are illegal in Windows paths. Partitions are immutable, so this
+  can't be revised later.
+- **`gw` = the gameweek a run was TARGETING; `event` = the gameweek a
+  row's xPts is FOR.** A projections artefact spans the 5-GW horizon, so
+  a revision series fixes `event` and spans multiple `gw` partitions.
+  `Archive.revisions()` is keyed on `event`.
+- **Never interpolate a path into DuckDB SQL — bind it.** This repo's own
+  path contains an apostrophe, which silently made every query return
+  zero rows.
+
+Writing is `python -m fpl.history.archive` (pipeline step); reading is
+`fpl.history.query.open_archive()`, which is read-only, excludes
+incomplete runs, and joins the season-stable `code` automatically.
+
 ## Dashboard — four apps, two purposes
 
 - `dashboard/index.html` (generated from `dashboard/template.html` +
-  `dashboard/data.json` via `scripts/build_dashboard_data.py`) — static,
-  self-contained, offline snapshot. **Edit `template.html`, never
-  `index.html` by hand**, then regenerate. Reads only committed
-  `data/output/*.json` + `data/processed/*.parquet` — never recomputes.
+  `dashboard/data.json` + `dashboard/history.json` via
+  `scripts/build_dashboard_data.py` and `scripts/build_history_data.py`)
+  — static, self-contained, offline snapshot. **Edit `template.html`,
+  never `index.html` by hand**, then regenerate. Reads only committed
+  `data/output/*.json` + `data/processed/*.parquet` + `data/history/` —
+  never recomputes (but see the known open item below: the builder
+  currently violates this).
 - `dashboard/live_server.py` + `dashboard/live/index.html` — **the
   recommended live decision layer.** Flask JSON API + a purpose-built
   frontend for what-if squad exploration (lock/ban/budget/formation/chip,

@@ -21,3 +21,12 @@ data/raw/
 # is graded against is data/output/gw{n}_recommendations.json, which IS
 # committed.
 data/scratch/
+
+# Phase G (docs/superpowers/specs/2026-08-22-history-layer-design.md §3.7):
+# the DuckDB read model and the derived manifest are both rebuildable from
+# the immutable Parquet/JSON partitions under data/history/. Keeping the
+# immutable thing immutable and the queryable thing disposable is the whole
+# point — a bot-rewritten index committed on four crons a week would be a
+# merge-conflict generator.
+data/history/manifest.json
+*.duckdb
