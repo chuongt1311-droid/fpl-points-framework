@@ -47,6 +47,11 @@ def decisions_partition(gw: int, asof: str) -> Path:
     return HISTORY_DIR / "decisions" / f"gw={gw}" / f"asof={asof}" / "recommendation.json"
 
 
+def transfers_partition(gw: int, asof: str) -> Path:
+    """Phase H transfer recommendations, archived like any other decision."""
+    return HISTORY_DIR / "transfers" / f"gw={gw}" / f"asof={asof}" / "transfers.json"
+
+
 def health_partition(gw: int, asof: str, model: str) -> Path:
     return HISTORY_DIR / "health" / f"gw={gw}" / f"asof={asof}" / f"model={model}" / "model_health.json"
 

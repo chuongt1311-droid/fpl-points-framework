@@ -4,6 +4,14 @@
 
 season: "2026-27"          # the season whose GW1 the plan's "~48h" deadline refers to
 
+# The operator's own FPL entry. PUBLIC — it's the number in the Points page
+# URL (/entry/<id>/event/<gw>) — not a secret. Used by
+# fpl/decide/squad_state.py to read the real squad from the public API.
+# Sell prices and free transfers are NOT public and come from a locally
+# pasted, gitignored my-team file; no credential is ever stored or handled.
+fpl:
+  entry_id: 6669718
+
 squad_rules:
   budget_tenths: 1000        # £100.0m, in FPL's tenths-of-a-million units
   total: 15

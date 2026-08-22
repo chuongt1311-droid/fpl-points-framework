@@ -1790,3 +1790,120 @@ Re-tested on the same branch:
 - No real pipeline work ran in any of these runs: the forced failure is
   the first step, so nothing was collected, projected, archived, or
   committed. `data/history/` was untouched throughout.
+
+## 16. Phase H (H3a + H3b) — the transfer decision layer (2026-08-22, branch `phase-h-transfers`)
+
+Built to `docs/superpowers/specs/2026-08-22-transfer-decision-layer-design.md`
+via `docs/superpowers/plans/2026-08-22-transfer-decision-layer.md`. The
+tool now answers the question `CLAUDE.md` always claimed it answered:
+*"I own these 15, I have N free transfers and £X in the bank — what do I
+do?"* 193 tests passing (was 162 at the start of Phase H).
+
+### What was built
+
+- `fpl/decide/constraints.py` — shared MILP constraint builders.
+- `fpl/decide/squad_state.py` — extended with real-team ingestion.
+- `fpl/decide/transfers.py` — the transfer solve + artefact + CLI.
+- `scripts/my_team_instructions.py` — how to save the pasted file.
+- `fpl/history/` — archive extended to capture transfer recommendations.
+
+### Verified against the live API before designing, which corrected the plan
+
+Probing entry `6669718` first changed two design assumptions:
+
+- **Bank IS public** (`entry_history.bank`), so the pasted file is needed
+  for sell prices and free transfers only — not bank as originally
+  assumed. The pasted value is still *preferred* where present, because
+  the public one is the bank at the last deadline and goes stale within a
+  gameweek once a transfer has been made.
+- **Prices are NOT** in the public picks payload (`element`, `position`,
+  `multiplier`, `is_captain`, `is_vice_captain`, `element_type` only),
+  confirming sell prices genuinely require the authenticated endpoint.
+
+Also verified, and now recorded: the real GW1 team is byte-identical to
+the model's recommendation — same 15, same XI, same captain and vice.
+`data/state/squad_gw1.json`'s `played` was `null`; it is now backfilled
+**from the live API**, after asserting it matches `recommended`, rather
+than copying `recommended` across and calling it observed.
+
+### Deliberate deviation from the v4 plan's stated objective
+
+The plan writes H3b's objective as single-gameweek:
+`Σ xPts(XI) + captain − 4·penalized`. Taken literally that is
+systematically hit-averse — a one-week gain must clear 4 points to
+justify a hit, which almost never happens, so the solver would recommend
+rolling nearly always and the `−4` machinery would be decorative.
+
+Real transfers pay back over weeks, and squad selection in this repo
+already uses the 5-GW decay-weighted value. So the transfer decision uses
+the same, with the hit charged **once**. Both gains are always reported:
+weighted (the decision basis) and next-GW (the honest short-term
+consequence, stated even when negative).
+
+### The plan's "reuse the constraint builders" was not possible as written
+
+`optimise_squad` declared its constraints inline. They were extracted to
+`fpl/decide/constraints.py` first, behind a hard gate: `fpl.decide.optimiser`
+re-run against real data had to produce byte-identical console output
+**and** a byte-identical `gw1_recommendations.json`. It did. A pure
+refactor that changes a number is a bug, and this project has caught that
+class four times.
+
+### The owned-but-filtered trap turned out simpler than the spec expected
+
+`apply_availability_filters` drops injured players from the pool — but an
+injured player you *own* must still be sellable, or
+`squad[p] = current[p] − out[p] + in[p]` is unsatisfiable for him.
+
+The spec proposed a union of `pool ∪ current_squad` plus an explicit
+no-buy flag on owned-but-filtered players. **The flag turned out to be
+unnecessary**: for any owned player `current[p] = 1`, so
+`transfer_in[p] ≤ 1 − current[p] = 0` already forbids buying him. The
+union alone is the whole fix. Two tests cover it — sell the injured
+player when an upgrade exists, keep him when one doesn't.
+
+### Two ingestion guards, asymmetric on purpose
+
+A stale pasted file is the realistic failure mode and yields a confident,
+wrong, unactionable recommendation. So:
+
+- **Squad mismatch** between the pasted file and the public endpoint is
+  **fatal** — it means the file is stale or belongs to a different entry,
+  and every downstream number would be wrong.
+- **Bank mismatch** is **not** fatal — the public value is the bank at the
+  last deadline, so a difference legitimately means a transfer has already
+  been made this week. The live value wins and the difference is surfaced.
+
+Plus a post-solve `InfeasibleBudgetError` assertion independent of the
+MILP constraint, because the constraint being right in theory is not the
+same as the input numbers being right.
+
+### An honest limitation the real-data run exposed
+
+Smoke-tested against the actual squad and real projections (with sell
+prices approximated by current price, since no pasted file existed yet):
+it recommended **Guéhi → Matheus N.**, 1 free transfer, 0 hits, legal 15,
+affordable at £0.0 bank. Correct in shape — but the gain was only
+**+0.18** weighted points.
+
+That exposes a real limitation of any single-deadline solve: **an unused
+free transfer is worth exactly zero to the objective**, so the model will
+spend one for any positive gain, however marginal, where a real manager
+would roll it. Pricing an unspent FT is precisely what H3c's terminal-
+state valuation (the reference solver's `ft_value`) adds.
+
+Rather than leave that as a doc footnote, low-gain recommendations now
+carry an explicit `caveats` entry in the artefact itself, saying the gain
+is marginal and that rolling is likely at least as good. Two tests pin
+the behaviour — marginal gains carry the caveat, large ones don't.
+
+### Not done, deliberately
+
+- **H3c (multi-period)** and **H3d (chips)** — out of scope; H3c's own
+  gate is reproducing H3b exactly at w=1, which needs H3b trusted first.
+- **`transfers.py` is NOT in `weekly.yml`.** The recommendation must be
+  hand-verified as executable in the real game for two gameweeks before
+  it runs unattended. That gate is calendar-bound.
+- **`optimiser.py`'s silent lock-of-filtered-player bug** (HANDOFF §9) is
+  still open. It is the same bug class as the trap above and now clearly
+  worth fixing, but it is a separate defect in a different function.
