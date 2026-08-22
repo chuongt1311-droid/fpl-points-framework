@@ -39,6 +39,7 @@ import pandas as pd
 import pulp
 import yaml
 
+from fpl.decide import constraints
 from fpl.decide import squad_state as squad_state_mod
 from fpl.project import project as project_mod
 from fpl.status import UNAVAILABLE_STATUSES
@@ -238,10 +239,12 @@ def optimise_squad(
             if team[i] in banned_clubs:
                 prob += squad[i] == 0
 
-    # Squad composition
-    prob += pulp.lpSum(squad[i] for i in ids) == rules["total"]
-    for pos, count in [("GK", rules["gk"]), ("DEF", rules["def"]), ("MID", rules["mid"]), ("FWD", rules["fwd"])]:
-        prob += pulp.lpSum(squad[i] for i in ids if position[i] == pos) == count
+    # Squad composition, club limits, budget, XI shape and captain rules all
+    # live in fpl/decide/constraints.py so fpl/decide/transfers.py reuses the
+    # SAME legality rules rather than forking them (spec §4). Behaviour is
+    # unchanged — same expressions, same order — and that is gated on a
+    # byte-identical real-data re-run, not assumed.
+    constraints.add_squad_composition(prob, squad, ids, position, rules)
 
     # budget_tenths is in tenths-of-a-million (matches raw now_cost units);
     # `price` here is already converted to real £m by build_players.py, so
@@ -249,33 +252,16 @@ def optimise_squad(
     # plan §E2: budget_override replaces the RHS wholesale (a live "what if
     # I had £X instead" question), not an addition to the configured budget.
     budget_limit = budget_override if budget_override is not None else rules["budget_tenths"] / 10.0
-    prob += pulp.lpSum(price[i] * squad[i] for i in ids) <= budget_limit
-
-    for club in set(team.values()):
-        prob += pulp.lpSum(squad[i] for i in ids if team[i] == club) <= rules["max_per_club"]
+    constraints.add_budget(prob, squad, ids, price, budget_limit)
+    constraints.add_club_limits(prob, squad, ids, team, rules)
 
     # Starting XI. plan §E2 force_formation tightens a position's ">= min"
     # to "== exact" when the caller specifies it (e.g. {"def": 3, "mid": 5,
     # "fwd": 2} for a 3-5-2) — any position not named keeps its configured
     # minimum, unchanged from the weekly path's behaviour.
-    sx = rules["starting_xi"]
     force_formation = force_formation or {}
-    prob += pulp.lpSum(start[i] for i in ids) == sx["total"]
-    prob += pulp.lpSum(start[i] for i in ids if position[i] == "GK") == sx["gk"]
-    for pos_key, min_key in [("def", "min_def"), ("mid", "min_mid"), ("fwd", "min_fwd")]:
-        pos = pos_key.upper()
-        count_expr = pulp.lpSum(start[i] for i in ids if position[i] == pos)
-        if pos_key in force_formation:
-            prob += count_expr == force_formation[pos_key]
-        else:
-            prob += count_expr >= sx[min_key]
-    for i in ids:
-        prob += start[i] <= squad[i]
-
-    # Captain: exactly one, must be a starter
-    prob += pulp.lpSum(captain[i] for i in ids) == 1
-    for i in ids:
-        prob += captain[i] <= start[i]
+    constraints.add_xi_shape(prob, squad, start, ids, position, rules, force_formation)
+    constraints.add_captain_rules(prob, start, captain, ids)
 
     solver = pulp.PULP_CBC_CMD(msg=False)
     prob.solve(solver)
