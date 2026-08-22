@@ -259,3 +259,101 @@ def recommend(
         "captain": best["captain"],
         "vice_captain": best["vice_captain"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Output artefact + CLI entry point (spec §6/§7)
+# ---------------------------------------------------------------------------
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+OUTPUT_DIR = Path(__file__).resolve().parents[2] / "data" / "output"
+RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
+
+
+def write_recommendation(rec: dict, gw: int, entry_id: int, extra: dict) -> Path:
+    """
+    Writes data/output/gw{n}_transfers.json.
+
+    next_gw_gain is included even when negative: a correct long-game
+    transfer that costs points this week is exactly the case a human
+    needs to see, not have hidden.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {"gameweek": int(gw), "entry_id": int(entry_id),
+               "generated_utc": datetime.now(timezone.utc).isoformat()}
+    payload.update(rec)
+    payload.update(extra)
+    path = OUTPUT_DIR / f"gw{gw}_transfers.json"
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def _latest_started_gameweek() -> int:
+    """The most recent gameweek whose picks are available (deadline passed)."""
+    events = json.loads((RAW_DIR / "bootstrap_static.json").read_text(encoding="utf-8"))["events"]
+    started = [e["id"] for e in events if e.get("is_current") or e.get("finished")]
+    return max(started) if started else 1
+
+
+def main() -> int:
+    """
+    Wire ingestion -> solve -> artefact.
+
+    Deliberately NOT in weekly.yml yet (spec §7.3): the recommendation
+    must be hand-verified as executable in the real game for two
+    gameweeks before it runs unattended.
+    """
+    import pandas as pd
+
+    from fpl.decide.optimiser import load_config
+    from fpl.decide import squad_state
+    from fpl.project import project as project_mod
+
+    config = load_config()
+    entry_id = config["fpl"]["entry_id"]
+
+    projections = project_mod.project_gameweeks(config["horizon"]["gameweeks"], config)
+    totals = project_mod.weighted_horizon_total(projections, config)
+    players_raw = pd.read_parquet(
+        Path(__file__).resolve().parents[2] / "data" / "processed" / "players.parquet")
+    totals = totals.merge(players_raw[["id", "status"]], on="id", how="left")
+
+    public = squad_state.parse_entry_picks(
+        squad_state.fetch_entry_picks(entry_id, _latest_started_gameweek()))
+    pasted, age_h = squad_state.load_my_team_file()
+    state = squad_state.reconcile(public, pasted)
+
+    if state["bank_mismatch"]:
+        print(f"[transfers] NOTE: public bank {state['public_bank']} != live bank "
+              f"{state['bank']} — you have already transferred this week.")
+
+    target_gw = int(state["event"]) + 1
+    rec = recommend(totals, state["squad"], state["sell_prices"],
+                    state["bank"], state["free_transfers"], config)
+
+    path = write_recommendation(rec, target_gw, entry_id, {
+        "sell_price_source": "my_team_file",
+        "my_team_file_age_hours": round(age_h, 2),
+    })
+
+    if rec["recommendation"] == "roll":
+        print(f"[transfers] GW{target_gw}: ROLL. No transfer clears the hit cost.")
+    else:
+        for m in rec["transfers"]:
+            print(f"[transfers] GW{target_gw}: OUT {m['out']['web_name']} "
+                  f"(sell £{m['out']['sell_price']}m) -> IN {m['in']['web_name']} "
+                  f"(buy £{m['in']['price']}m)")
+        print(f"[transfers] hits={rec['hits']} (-{rec['hit_points']} pts) | "
+              f"weighted gain {rec['weighted_gain']:+.2f} | "
+              f"next-GW {rec['next_gw_gain']:+.2f}")
+    for c in rec.get("caveats", []):
+        print(f"[transfers] CAVEAT: {c}")
+    print(f"[transfers] wrote {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

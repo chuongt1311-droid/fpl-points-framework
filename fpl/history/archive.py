@@ -113,7 +113,19 @@ def discover_artefacts() -> dict:
             if p.exists():
                 health.append((target, model, p))
 
-    return {"projections": projections, "decisions": decisions, "health": health}
+    # Phase H: transfer recommendations are decisions too — archiving them
+    # keeps the bitemporal record whole rather than leaving a hole where
+    # "what did it tell me to do that week" should be.
+    transfers_found = []
+    for p in sorted(OUTPUT_DIR.glob("gw*_transfers.json")):
+        try:
+            gw = int(json.loads(p.read_text(encoding="utf-8"))["gameweek"])
+        except (ValueError, KeyError, json.JSONDecodeError):
+            continue
+        transfers_found.append((gw, p))
+
+    return {"projections": projections, "decisions": decisions,
+            "health": health, "transfers": transfers_found}
 
 
 def _copy(src: Path, dst: Path) -> None:
@@ -173,6 +185,12 @@ def archive_run(now: Optional[datetime] = None) -> dict:
         dst = paths.health_partition(gw, asof, model)
         _copy(src, dst)
         archived.append({"domain": "health", "gw": gw, "model": model,
+                         "path": str(dst.relative_to(paths.HISTORY_DIR))})
+
+    for gw, src in found.get("transfers", []):
+        dst = paths.transfers_partition(gw, asof)
+        _copy(src, dst)
+        archived.append({"domain": "transfers", "gw": gw, "model": None,
                          "path": str(dst.relative_to(paths.HISTORY_DIR))})
 
     _write_id_code_map(asof)
