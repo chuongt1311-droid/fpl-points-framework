@@ -2,8 +2,8 @@
   "gameweek": 1,
   "total_cost": 100.0,
   "budget": 100.0,
-  "next_gw_expected_points": 64.56,
-  "horizon_weighted_xpts": 223.8,
+  "next_gw_expected_points": 64.58,
+  "horizon_weighted_xpts": 223.98,
   "xi_correction_gain": 0.0,
   "captain": {
     "id": 411,
@@ -26,12 +26,12 @@
       "is_vice_captain": false
     },
     {
-      "id": 388,
-      "web_name": "Guéhi",
+      "id": 389,
+      "web_name": "Matheus N.",
       "position": "DEF",
       "team": 15,
       "price": 6.0,
-      "weighted_xpts": 17.61,
+      "weighted_xpts": 17.79,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -152,7 +152,7 @@
       "position": "DEF",
       "team": 7,
       "price": 4.0,
-      "weighted_xpts": 6.58,
+      "weighted_xpts": 6.59,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
