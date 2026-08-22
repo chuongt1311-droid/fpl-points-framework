@@ -30,3 +30,7 @@ data/scratch/
 # merge-conflict generator.
 data/history/manifest.json
 *.duckdb
+
+# Phase H: the pasted my-team JSON (sell prices + free transfers). Personal
+# squad/price data that the transfer solver reads locally. Never committed.
+data/private/
