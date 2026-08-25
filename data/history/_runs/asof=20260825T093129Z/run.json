@@ -1,0 +1,57 @@
+{
+  "run_id": "5ab8238d-752d-4b69-9afc-339bd8b2a56c",
+  "asof": "20260825T093129Z",
+  "asof_iso": "2026-08-25T09:31:29.886293+00:00",
+  "git_sha": "d149f0c20caf6928bc843c19cd594c19855b6b5a",
+  "git_dirty": true,
+  "config_sha256": "7d8c21cc099f804fd3a384a7a8c03ec1bf6671d7c7d25bc8364a199237f575ce",
+  "trigger": "schedule",
+  "target_gameweek": 2,
+  "deadline_utc": "2026-08-28T17:30:00Z",
+  "hours_to_deadline": 79.97503158527778,
+  "provenance": "recorded",
+  "archived": [
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "projections/gw=1/asof=20260825T093129Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "projections/gw=1/asof=20260825T093129Z/model=m2_xg/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "projections/gw=1/asof=20260825T093129Z/model=m3_understat/players.parquet"
+    },
+    {
+      "domain": "decisions",
+      "gw": 1,
+      "model": null,
+      "path": "decisions/gw=1/asof=20260825T093129Z/recommendation.json"
+    },
+    {
+      "domain": "health",
+      "gw": 2,
+      "model": "m0_rules",
+      "path": "health/gw=2/asof=20260825T093129Z/model=m0_rules/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 2,
+      "model": "m2_xg",
+      "path": "health/gw=2/asof=20260825T093129Z/model=m2_xg/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 2,
+      "model": "m3_understat",
+      "path": "health/gw=2/asof=20260825T093129Z/model=m3_understat/model_health.json"
+    }
+  ]
+}
