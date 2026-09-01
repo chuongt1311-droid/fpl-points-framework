@@ -1,0 +1,81 @@
+{
+  "run_id": "3e033139-2094-4c04-b4ec-427736fae6c8",
+  "asof": "20260901T135350Z",
+  "asof_iso": "2026-09-01T13:53:50.796959+00:00",
+  "git_sha": "b83d7f12e279328cbe893aa701ff4acc0bd8fde9",
+  "git_dirty": true,
+  "config_sha256": "7d8c21cc099f804fd3a384a7a8c03ec1bf6671d7c7d25bc8364a199237f575ce",
+  "trigger": "schedule",
+  "target_gameweek": 3,
+  "deadline_utc": "2026-09-04T17:30:00Z",
+  "hours_to_deadline": 75.60255640027778,
+  "provenance": "recorded",
+  "archived": [
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "projections/gw=1/asof=20260901T135350Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 2,
+      "model": "m0_rules",
+      "path": "projections/gw=2/asof=20260901T135350Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 3,
+      "model": "m0_rules",
+      "path": "projections/gw=3/asof=20260901T135350Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "projections/gw=1/asof=20260901T135350Z/model=m2_xg/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "projections/gw=1/asof=20260901T135350Z/model=m3_understat/players.parquet"
+    },
+    {
+      "domain": "decisions",
+      "gw": 1,
+      "model": null,
+      "path": "decisions/gw=1/asof=20260901T135350Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 2,
+      "model": null,
+      "path": "decisions/gw=2/asof=20260901T135350Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 3,
+      "model": null,
+      "path": "decisions/gw=3/asof=20260901T135350Z/recommendation.json"
+    },
+    {
+      "domain": "health",
+      "gw": 3,
+      "model": "m0_rules",
+      "path": "health/gw=3/asof=20260901T135350Z/model=m0_rules/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 3,
+      "model": "m2_xg",
+      "path": "health/gw=3/asof=20260901T135350Z/model=m2_xg/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 3,
+      "model": "m3_understat",
+      "path": "health/gw=3/asof=20260901T135350Z/model=m3_understat/model_health.json"
+    }
+  ]
+}
