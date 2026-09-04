@@ -290,7 +290,8 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
 
   <header class="topbar">
     <div class="brand">
-      <span class="eyebrow"><span class="dot"></span><span id="season-label">Season</span></span>
+      <span class="eyebrow"><span class="dot"></span><span id="season-label">Season</span>
+        <a href="weeks/index.html" style="color:var(--accent,#5cc8ff);text-decoration:none;margin-left:10px;">past weeks →</a></span>
       <h1>FPL Points-Maximization — GW<span id="gw-label"></span></h1>
     </div>
     <div class="deadline">
@@ -339,7 +340,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
         <h2>What to do</h2>
         <div class="line">
           <div class="tag">Transfer</div>
-          <div class="txt">Initial squad build for GW1 — there is no prior squad to transfer from, so no transfer decision applies this week.</div>
+          <div class="txt" id="transfer-txt"></div>
         </div>
         <div class="line">
           <div class="tag">Chip</div>
@@ -611,6 +612,7 @@ document.getElementById('footer-note').textContent = DATA.meta.generated_note;
 
 function tick(){
   const el = document.getElementById('countdown');
+  if(!DATA.meta.deadline_utc){ el.textContent = '—'; return; }
   const diff = new Date(DATA.meta.deadline_utc).getTime() - Date.now();
   if(diff <= 0){ el.textContent = 'DEADLINE PASSED'; el.classList.add('expired'); return; }
   const d = Math.floor(diff/86400000);
@@ -693,6 +695,22 @@ function renderTicker(fixtures, dual){
 
   const lim8 = DATA.known_limitations.find(l=>l.startsWith('FDR is derived'));
   document.getElementById('gw1-caveat').textContent = lim8 || '';
+
+  // Transfer line — GW1 has no prior squad; later GWs show the committed
+  // gw{n}_transfers.json if a manual `fpl.decide.transfers` run produced one.
+  const tEl = document.getElementById('transfer-txt');
+  const t = DATA.transfer;
+  if(DATA.meta.gameweek === 1){
+    tEl.textContent = 'Initial squad build for GW1 — there is no prior squad to transfer from, so no transfer decision applies this week.';
+  } else if(!t){
+    tEl.textContent = 'No automated transfer recommendation this week — fpl/decide/transfers.py runs manually until it has two gameweeks of hand-verification (see docs/HANDOFF.md §9). Run it against a fresh data/private/my_team.json.';
+  } else if(t.recommendation === 'roll' || !(t.transfers && t.transfers.length)){
+    tEl.textContent = `Roll — no transfer beats its points cost. Weighted gain of the best move: ${(t.weighted_gain||0).toFixed(2)}.`;
+  } else {
+    const moves = t.transfers.map(m=>`${m.out.web_name} → ${m.in.web_name}`).join(', ');
+    const hit = t.hits ? ` (−${t.hit_points} pt hit)` : '';
+    tEl.textContent = `${moves}${hit}. Weighted gain ${(t.weighted_gain||0).toFixed(2)}, next-GW ${(t.next_gw_gain>=0?'+':'')}${(t.next_gw_gain||0).toFixed(2)}. Sell prices from a pasted my_team.json — verify in-game before committing.`;
+  }
 })();
 
 /* ===================== VIEW 2: PLAYER EXPLORER ===================== */

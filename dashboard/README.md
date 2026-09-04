@@ -79,6 +79,11 @@ that satisfies that.
 - `data.json` — the data payload alone, for inspection/debugging.
 - `index.html` — **generated.** `template.html` with `data.json` inlined
   into it, so the dashboard is one fully offline-capable file. Don't hand-edit.
+  Shows the upcoming gameweek, not a fixed one (PROJECT_LOG §18).
+- `weeks/` — **generated.** One frozen snapshot per gameweek
+  (`gw{N}.html`, a byte copy of that week's `index.html`) plus a
+  `weeks/index.html` list. Produced by `scripts/archive_dashboard_week.py`,
+  run right after `build_dashboard_data.py`. Don't hand-edit.
 - `live_server.py` / `live/index.html` — the Flask live decision layer.
 - `app.py` / `live_data.py` — the legacy Streamlit live decision layer
   and its shared, framework-agnostic data-loading module.
@@ -107,10 +112,10 @@ directly to get it — same code path production uses, not reimplemented.
 - **Chip Planner** has no live recommendations — `fpl/decide/chips.py`
   doesn't exist yet (see `HANDOFF.md` §6). The tab shows the config
   thresholds it will use, honestly labelled as not-yet-computed.
-- **This Week**'s transfer line is hardcoded to "initial squad, no
-  transfer to evaluate" because `fpl/decide/transfers.py` doesn't exist
-  yet either. Once it does, wire its output through `data/output/` and
-  this script the same way `gw1_recommendations.json` is wired now.
+- **This Week**'s transfer line renders `gw{n}_transfers.json` when a
+  manual `fpl.decide.transfers` run has committed one (it's not in
+  `weekly.yml` yet — HANDOFF §9). GW1 shows initial-build text; a later
+  GW with no artefact shows a "runs manually" note.
 - Fixture Radar and the ticker both use `fixture_multipliers.parquet`,
   which is season-long and already has no missing-file gap (unlike
   `fixtures.parquet` itself — see `HANDOFF.md` §5 item 5).

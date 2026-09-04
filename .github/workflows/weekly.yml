@@ -109,11 +109,19 @@ jobs:
         env:
           PYTHONPATH: "."
 
+      # PROJECT_LOG §18: freeze this run's self-contained index.html as
+      # dashboard/weeks/gw{N}.html and rebuild the archive index. Byte copy —
+      # no re-render. Overwrites within a gameweek, frozen once it passes.
+      - name: Dashboard weekly snapshot + archive index
+        run: python scripts/archive_dashboard_week.py
+        env:
+          PYTHONPATH: "."
+
       - name: Commit + push regenerated artefacts
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/history.json dashboard/index.html
+          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else
