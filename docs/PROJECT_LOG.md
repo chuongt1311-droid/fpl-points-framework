@@ -2011,3 +2011,51 @@ pipeline had just run; the FROZEN/LIVE hole is unchanged.
 
 ---
 
+
+## 19. Dashboard "My Team" view — your squad, not the optimal one (2026-09-04)
+
+### The gap
+
+The static dashboard's pitch shows the model's OPTIMAL £100m squad. From
+GW2 on that is a team the user does not own — there was no view of their
+ACTUAL 15, and no way to weigh "roll vs transfer vs wildcard" against it.
+A user contemplating a wildcard had nothing to look at.
+
+### What changed (bounded, brainstormed 2026-09-04)
+
+- **`scripts/build_my_team_data.py`** (new). Same FROZEN/LIVE split as
+  `build_dashboard_data.py`:
+  - squad composition: one cheap public `entry/{id}/event/{gw}/picks` pull
+  - projections / statuses / prices: committed artefacts only
+  - sell prices / FT / bank: `data/private/my_team.json` if present and
+    < 24h old (`squad_state.load_my_team_file`); otherwise market
+    `now_cost` as a proxy, and the payload's `price_source` says so
+  - `build_analysis()` calls `transfers.solve_transfers` four ways —
+    `force_n_transfers` 0 / 1 / 2, and `free_transfers=15` for the
+    wildcard (no hits, full re-optimise within sell-value budget). No new
+    solver code.
+  - `_pair_moves()` pairs transfers out↔in WITHIN position — the MILP
+    returns two sets, and a naive index-zip pairs a sold FWD with a
+    bought GK on a 6-change wildcard.
+  - writes `dashboard/my_team.json` (gitignored — may carry sell prices)
+- **`scripts/build_dashboard_data.py`** — inlines `my_team.json` into
+  `index.html` at the new `/*__MYTEAM__*/` placeholder (`null` if absent,
+  same always-substitute rule as `__HISTORY__`).
+- **`dashboard/template.html`** — new "My Team" tab: your 15 with
+  price/sell/status/xPts, a roll/1/2/wildcard comparison table, and a
+  verdict line that leans on the **next-GW** gain (the 5-GW figure is
+  horizon-weighted on a fixture-degraded early-season model and
+  over-states a rebuild).
+- **`.github/workflows/weekly.yml`** — `build_my_team_data.py` step
+  before the dashboard-data step. In CI there's no `my_team.json`, so the
+  committed `index.html` carries the market-price version.
+- Tests: `tests/test_my_team_data.py` (new, 7). 228 passing.
+
+### GW3 result (with the user's real my_team.json)
+
+roll 200.4 (5-GW weighted) · 1 free transfer +11.65 (next-GW **+1.31**) ·
+2 transfers/1 hit +13.86 (+3.21) · wildcard +25.29 over 6 moves, no hits
+(next-GW **+2.62**). The wildcard's 5-GW number is inflated by the
+residual Wissa start-rate lag (§17) and horizon weighting on inert
+fixtures; next-GW it beats a free transfer by ~1.3. Verdict shown: hold
+the chip.
