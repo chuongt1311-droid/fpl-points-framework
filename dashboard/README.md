@@ -84,6 +84,13 @@ that satisfies that.
   (`gw{N}.html`, a byte copy of that week's `index.html`) plus a
   `weeks/index.html` list. Produced by `scripts/archive_dashboard_week.py`,
   run right after `build_dashboard_data.py`. Don't hand-edit.
+- `my_team.json` — **generated, gitignored.** Your actual squad + a
+  roll/1-transfer/2-transfer/wildcard comparison, from
+  `scripts/build_my_team_data.py` (run it *before* `build_dashboard_data.py`,
+  which inlines it into `index.html`'s "My Team" tab). Uses your
+  `data/private/my_team.json` sell prices when fresh, else market price as
+  a proxy. In CI there's no private file so the committed dashboard shows
+  the market-price version.
 - `live_server.py` / `live/index.html` — the Flask live decision layer.
 - `app.py` / `live_data.py` — the legacy Streamlit live decision layer
   and its shared, framework-agnostic data-loading module.
@@ -96,7 +103,9 @@ Run after any pipeline re-run (new gameweek, model change, re-optimised squad):
 $env:PYTHONPATH="."; & ".venv\Scripts\python.exe" scripts\build_dashboard_data.py
 ```
 
-This reads `data/output/gw1_recommendations.json`, `data/output/model_health.json`,
+This reads `data/output/gw{target}_recommendations.json` (target = the
+upcoming GW, or the latest solved), `data/output/model_health.json`,
+`data/output/gw{target}_transfers.json` if present,
 `data/processed/*.parquet`, and `data/projections/gw{n}.parquet` — the
 dashboard's data contract per plan §6: **read pipeline outputs, never
 recompute the model.** The one exception, and it's a read not a

@@ -104,6 +104,15 @@ jobs:
       - name: Dashboard history data (reads the archive, never recomputes)
         run: python scripts/build_history_data.py
 
+      # PROJECT_LOG §19: your ACTUAL squad + a roll/1/2/wildcard comparison.
+      # One cheap public entry pull; sell prices from data/private/my_team.json
+      # if present (it won't be in CI — market price is the documented proxy).
+      # Runs BEFORE build_dashboard_data.py, which inlines dashboard/my_team.json.
+      - name: Dashboard "My Team" data (your squad + transfer/wildcard analysis)
+        run: python scripts/build_my_team_data.py
+        env:
+          PYTHONPATH: "."
+
       - name: Dashboard data (reads pipeline outputs, never recomputes)
         run: python scripts/build_dashboard_data.py
         env:

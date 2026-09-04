@@ -317,6 +317,14 @@ def main():
             history_path.read_text(encoding="utf-8") if history_path.exists() else "null"
         )
         html = html.replace("/*__HISTORY__*/", history_json)
+        # my_team.json — produced separately by scripts/build_my_team_data.py
+        # (needs a live entry pull + optional private my_team.json). Same
+        # always-substitute rule: "null" if absent, never a bare placeholder.
+        my_team_path = DASHBOARD_DIR / "my_team.json"
+        my_team_json = (
+            my_team_path.read_text(encoding="utf-8") if my_team_path.exists() else "null"
+        )
+        html = html.replace("/*__MYTEAM__*/", my_team_json)
         index_path = DASHBOARD_DIR / "index.html"
         index_path.write_text(html, encoding="utf-8")
         print(f"Wrote {index_path} ({index_path.stat().st_size / 1024:.0f} KB)")

@@ -1,5 +1,16 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-09-04, latest (dashboard "My Team" view):**
+The static dashboard showed the model's *optimal* squad, never the user's
+actual 15. New "My Team" tab: your real squad (from a cheap public entry
+pull) + a roll / 1-transfer / 2-transfer / wildcard comparison via
+`transfers.solve_transfers`. New `scripts/build_my_team_data.py` writes
+`dashboard/my_team.json` (gitignored); `build_dashboard_data.py` inlines
+it. Sell prices from `data/private/my_team.json` when fresh, else market
+proxy. Wired into `weekly.yml`. **228 tests passing.** Detail:
+`docs/PROJECT_LOG.md` §19. GW3: wildcard shows +25.29/5-GW but only
++2.62 next-GW — verdict is hold the chip (matches the Council review).
+
 **Status as of 2026-09-04, later (per-gameweek dashboard):**
 `scripts/build_dashboard_data.py` was pinned to GW1 (recommendation
 filename + hardcoded deadline); the static dashboard never advanced. Now

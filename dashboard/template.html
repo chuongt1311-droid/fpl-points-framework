@@ -304,6 +304,7 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
 
   <nav class="tabs" role="tablist" aria-label="Dashboard views">
     <div class="tab active" role="tab" tabindex="0" aria-selected="true" aria-controls="view-week" id="tab-week" data-view="week">This Week</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-myteam" id="tab-myteam" data-view="myteam">My Team</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-explorer" id="tab-explorer" data-view="explorer">Player Explorer</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-radar" id="tab-radar" data-view="radar">Fixture Radar</div>
     <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-chips" id="tab-chips" data-view="chips">Chip Planner</div>
@@ -358,6 +359,11 @@ footer{text-align:center;color:var(--chalk-dim);font-size:11.5px;margin-top:26px
       <h2>Bench</h2>
       <div class="bench-strip" id="bench-strip"></div>
     </div>
+  </section>
+
+  <!-- ===================== VIEW: MY TEAM (PROJECT_LOG §19) ===================== -->
+  <section class="view" id="view-myteam" role="tabpanel" aria-labelledby="tab-myteam">
+    <div id="myteam-body"></div>
   </section>
 
   <!-- ===================== VIEW 2: PLAYER EXPLORER ===================== -->
@@ -560,6 +566,10 @@ const DATA = /*__DATA__*/;
    fallback value after the comment: the substitution would leave it
    dangling (`{...}null`) and break the whole page, not just this view. */
 const HISTORY = /*__HISTORY__*/;
+/* PROJECT_LOG §19: written separately by scripts/build_my_team_data.py
+   (needs a live entry pull). Same always-substitute rule — `null` when
+   dashboard/my_team.json is absent. */
+const MY_TEAM = /*__MYTEAM__*/;
 </script>
 <script>
 (function(){
@@ -1091,6 +1101,81 @@ function renderTicker(fixtures, dual){
       scales:{x:{ticks:{color:CHALK_DIM},grid:{display:false}},
               y:{ticks:{color:CHALK_DIM},grid:{color:BORDER}}}}
   });
+})();
+
+/* ===================== VIEW: MY TEAM (PROJECT_LOG §19) ===================== */
+(function(){
+  const host = document.getElementById('myteam-body');
+  if(!MY_TEAM){
+    host.innerHTML = '<div class="card"><h2>My Team</h2><p style="color:var(--chalk-dim);font-size:13px;">'
+      + 'Not generated for this snapshot. Run <span class="mono">scripts/build_my_team_data.py</span> '
+      + '(after pasting a fresh <span class="mono">data/private/my_team.json</span> for exact sell prices) '
+      + 'to pull your actual 15 and a roll / 1-transfer / 2-transfer / wildcard comparison.</p></div>';
+    return;
+  }
+  const mt = MY_TEAM, m = mt.meta, a = mt.analysis;
+  const g1 = v => (v>=0?'+':'') + v.toFixed(2);
+  const statusFlag = s => (s && s!=='a') ? ` <span class="status-flag" title="${s}">●</span>` : '';
+
+  const rows = mt.squad.map(p=>`<tr>
+      <td>${p.position}</td>
+      <td>${p.web_name}${statusFlag(p.status)}</td>
+      <td class="mono">${p.team_short}</td>
+      <td class="mono">${fmtMoney(p.price)}</td>
+      <td class="mono">${p.sell_price==null?'—':fmtMoney(p.sell_price)}</td>
+      <td class="mono">${p.next_gw_xpts==null?'—':p.next_gw_xpts.toFixed(2)}</td>
+      <td class="mono">${p.weighted_xpts==null?'—':p.weighted_xpts.toFixed(1)}</td>
+    </tr>`).join('');
+
+  const opt = [
+    ['Roll',        a.roll,     '0 transfers'],
+    ['1 transfer',  a.one,      a.one.hits?`${a.one.hits} hit`:'free'],
+    ['2 transfers', a.two,      a.two.hits?`${a.two.hits} hit`:'free'],
+    ['Wildcard',    a.wildcard, 'chip · no hits'],
+  ];
+  const bestGain = Math.max(...opt.map(o=>o[1].weighted_gain));
+  const optRows = opt.map(([label,o,cost])=>{
+    const moves = o.moves.length ? o.moves.map(x=>`${x.out} → ${x.in}`).join(', ') : '—';
+    const hl = (o.weighted_gain===bestGain && bestGain>0) ? ' style="background:rgba(127,214,168,0.08)"' : '';
+    return `<tr${hl}>
+      <td><strong>${label}</strong><div style="color:var(--chalk-dim);font-size:11px">${cost}</div></td>
+      <td style="font-size:12px">${moves}</td>
+      <td class="mono">${g1(o.weighted_gain)}</td>
+      <td class="mono">${g1(o.next_gw_gain)}</td>
+    </tr>`;
+  }).join('');
+
+  const wc = a.wildcard, one = a.one;
+  // The 5-GW figure is horizon-weighted on an early-season model whose
+  // fixture engine is degraded — it systematically over-states a full
+  // rebuild. The next-GW gain is the number that isn't inflated, so the
+  // "is the wildcard worth it now" call leans on that.
+  const wcNow = wc.next_gw_gain, ftNow = Math.max(one.next_gw_gain, a.two.next_gw_gain - a.two.hit_points);
+  const verdict = (wcNow - ftNow < 3 || wcNow < 4)
+    ? `Next gameweek, a wildcard adds only ${g1(wcNow)} over your best free move (${g1(ftNow)}). The larger 5-GW figure (${g1(wc.weighted_gain)}) is horizon-weighted on a model whose fixture engine is still degraded (Model Health) — treat it as an upper bound, not a reason. Holding the chip for a visible fixture swing is the stronger play.`
+    : `Even next gameweek the wildcard adds ${g1(wcNow)} over your best free move (${g1(ftNow)}), across ${wc.moves.length} moves with no hits — and ${g1(wc.weighted_gain)} over 5 GWs. That's a real option, though the 5-GW number is inflated by early-season fixture uncertainty.`;
+
+  host.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi hero"><div class="label">Your squad — 5-GW weighted</div><div class="value mono">${a.roll.weighted_value.toFixed(1)}</div><div class="sub">GW${m.gameweek} · ${mt.squad.length} players</div></div>
+      <div class="kpi"><div class="label">In the bank</div><div class="value mono">${fmtMoney(m.bank||0)}</div><div class="sub">free transfers: ${m.free_transfers}</div></div>
+      <div class="kpi"><div class="label">Squad sell value</div><div class="value mono">${fmtMoney(m.squad_sell_value||0)}</div><div class="sub">${m.price_source==='my_team_file'?'your sell prices':'market price proxy'}</div></div>
+      <div class="kpi"><div class="label">Best move gain</div><div class="value mono">${g1(bestGain)}</div><div class="sub">5-GW weighted xPts</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Your 15</h2>
+      <table><thead><tr><th>Pos</th><th>Player</th><th>Club</th><th>Price</th><th>Sell</th><th>GW${m.gameweek} xPts</th><th>5-GW wxPts</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Roll vs transfer vs wildcard</h2>
+      <table><thead><tr><th>Option</th><th>Moves</th><th>5-GW gain</th><th>Next-GW gain</th></tr></thead>
+      <tbody>${optRows}</tbody></table>
+      <div class="note-banner">${verdict}</div>
+      <div class="note-banner">EXPLORATORY — ${m.note||''}. Gains are 5-GW decay-weighted xPts vs rolling; the model's fixture engine is degraded early-season (see Model Health). Always sanity-check in-game before committing a transfer.</div>
+    </div>`;
 })();
 
 })();

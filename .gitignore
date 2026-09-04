@@ -34,3 +34,8 @@ data/history/manifest.json
 # Phase H: the pasted my-team JSON (sell prices + free transfers). Personal
 # squad/price data that the transfer solver reads locally. Never committed.
 data/private/
+
+# PROJECT_LOG §19: the loose "My Team" payload. May carry sell prices from a
+# local my_team.json run. The analysis still reaches the committed dashboard —
+# build_dashboard_data.py inlines it into index.html (market-price version in CI).
+dashboard/my_team.json
