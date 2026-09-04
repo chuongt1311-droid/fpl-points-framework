@@ -1907,3 +1907,64 @@ the behaviour — marginal gains carry the caveat, large ones don't.
 - **`optimiser.py`'s silent lock-of-filtered-player bug** (HANDOFF §9) is
   still open. It is the same bug class as the trap above and now clearly
   worth fixing, but it is a separate defect in a different function.
+
+---
+
+## 17. Rolling start-rate ignored the current season (2026-09-04)
+
+### The symptom
+
+GW3 prep run. Wissa (id 464), a nailed Newcastle starter with 12 pts in
+GW1–GW2, projected **0.3 xPts flat across all 5 horizon gameweeks** — the
+available-player appearance floor. The optimiser/transfer solver therefore
+wanted him sold for almost any incoming forward.
+
+### Root cause
+
+`fpl/project/minutes.py::compute_rolling_start_rate` built each player's
+start probability from the last 6 `minutes > 0` appearances in
+`config.history.seasons` **only** — the three *completed* archived seasons.
+It never read the current season. Wissa's last 6 archived appearances were
+the tail of 2025-26 at Brentford, an injury spell, all substitute cameos
+(`starts = 0`) → `rolling_start_rate = 0.0` → `minutes_factor = 0.0`
+(fallback branch) → every scoring channel in `project.py` multiplied by 0.
+
+This is the "in-season role-change lag" the docstring admitted to (plan §10
+limitation 6) — but written assuming *pre-season*. Once real gameweeks
+exist the assumption is stale. The bug is general and bidirectional: any
+player whose 2026-27 role differs from their archived tail (new signings,
+won/lost starting spots, promoted-club players) is mis-rated until enough
+history rolls off.
+
+### The fix
+
+Append the current season to the rolling window, newest-wins, so
+current-season games enter the last-6 like any others — after 6
+current-season appearances the rate is 100% current. Deliberately minimal
+(user chose "natural last-6" over recency-weighting or a hard cutover):
+
+- `fpl/collect/history_loader.py` — new `seasons_to_load()`: completed
+  seasons **plus** `config.season`. `config.history.seasons` itself is
+  left completed-only (baseline.py depends on that). `_fetch_csv` already
+  no-ops on the pre-season 404.
+- `fpl/project/minutes.py::compute_rolling_start_rate` — read
+  `config.season`'s `merged_gw.csv` too, if present, ordered last.
+- `.github/workflows/weekly.yml` — unchanged command, now also pulls the
+  current season via the above.
+- Regression tests: `tests/test_minutes.py`
+  (`test_rolling_start_rate_blends_current_season_over_stale_history`,
+  `test_rolling_start_rate_pre_season_is_pure_historical`),
+  `tests/test_history_loader.py` (new file). 212 passing, +4 for this fix.
+
+### Known residual, surfaced not hidden
+
+vaastav's `2026-27/gws/merged_gw.csv` lags the FPL API by ~1 gameweek
+(only GW1 present on 2026-09-04, though GW2 is finished). So on the GW3
+run Wissa scored `rolling_start_rate = 1/6 ≈ 0.167`, not `2/6` — one
+genuine start against five stale cameos. Still a large under-rate this
+week; fully self-corrects by ~GW7. `fpl/collect/actuals` has GW1–GW2 but
+no `starts` column, so it was not used as a faster source — that would be
+a larger change (new column + wiring actuals into `weekly.yml`).
+
+---
+

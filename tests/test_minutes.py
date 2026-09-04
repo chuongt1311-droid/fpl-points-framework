@@ -63,6 +63,72 @@ def test_compute_minutes_factor_still_zeroes_unavailable_players_when_status_pre
     assert result.loc[result["id"] == 2, "minutes_factor"].iloc[0] > 0.0
 
 
+def _write_merged_gw(dir_path, rows: list[dict]) -> None:
+    """rows: dicts with element, minutes, starts, GW."""
+    gws = dir_path / "gws"
+    gws.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(gws / "merged_gw.csv", index=False, encoding="utf-8")
+
+
+def _write_players_raw(dir_path, id_to_code: dict) -> None:
+    dir_path.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame([{"id": i, "code": c} for i, c in id_to_code.items()]).to_csv(
+        dir_path / "players_raw.csv", index=False, encoding="utf-8"
+    )
+
+
+def test_rolling_start_rate_blends_current_season_over_stale_history(tmp_path, monkeypatch):
+    """Real bug regression: compute_rolling_start_rate read ONLY the archived
+    `history.seasons` and never the current season, so a player whose last 6
+    archived appearances were an injury/benched spell (starts=0) was floored
+    to rolling_start_rate=0.0 -> minutes_factor=0.0 -> xPts~0.3 flat, even
+    after starting every game of the new season. Wissa (Brentford injury tail
+    2025-26 -> nailed at Newcastle 2026-27) was the live case.
+
+    The current season must enter the rolling window like any other games:
+    last 6 of [4 old cameos (starts 0), 2 new starts] -> 2/6."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    _write_merged_gw(tmp_path / "2025-26", [
+        {"element": 50, "minutes": m, "starts": 0, "GW": gw}
+        for gw, m in zip(range(33, 39), [15, 1, 1, 24, 22, 19])
+    ])
+    _write_players_raw(tmp_path / "2025-26", {50: 999})
+    _write_merged_gw(tmp_path / "2026-27", [
+        {"element": 7, "minutes": 90, "starts": 1, "GW": 1},
+        {"element": 7, "minutes": 88, "starts": 1, "GW": 2},
+    ])
+    _write_players_raw(tmp_path / "2026-27", {7: 999})
+
+    config = {"history": {"seasons": ["2025-26"]}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02}}
+    players = _players([{"id": 7, "code": 999}])
+
+    out = minutes_mod.compute_rolling_start_rate(players, config)
+    rate = out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0]
+    assert rate == pytest.approx(2 / 6)
+
+
+def test_rolling_start_rate_pre_season_is_pure_historical(tmp_path, monkeypatch):
+    """Guard: with no current-season CSV yet (pre-season, or config has no
+    `season`), behaviour is unchanged — pure archived history, no crash."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    _write_merged_gw(tmp_path / "2025-26", [
+        {"element": 50, "minutes": 90, "starts": 1, "GW": gw} for gw in range(1, 7)
+    ])
+    _write_players_raw(tmp_path / "2025-26", {50: 999})
+
+    config = {"history": {"seasons": ["2025-26"]}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02}}
+    players = _players([{"id": 7, "code": 999}])
+
+    out = minutes_mod.compute_rolling_start_rate(players, config)
+    assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(1.0)
+
+
 def test_apply_gk_backup_override_re_promotes_backup_when_number_one_is_injured():
     """Real bug regression (finding #3): the price-designated #1 used to
     be picked from a STATIC price ranking with no re-check against

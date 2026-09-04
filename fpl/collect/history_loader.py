@@ -69,9 +69,25 @@ def load_season(season: str, config: Optional[dict] = None) -> dict[str, pd.Data
     return out
 
 
+def seasons_to_load(config: dict) -> list[str]:
+    """Completed seasons (config.history.seasons) PLUS the current season.
+
+    The current season is needed by fpl/project/minutes.py's rolling
+    start-rate window (an in-season role change must not stay invisible for
+    weeks). config.history.seasons itself is left completed-seasons-only —
+    baseline.py depends on that. `_fetch_csv` no-ops on a 404, so listing
+    the current season here is harmless before vaastav publishes it.
+    """
+    seasons = list(config["history"]["seasons"])
+    current = config.get("season")
+    if current and current not in seasons:
+        seasons.append(current)
+    return seasons
+
+
 def load_seasons(seasons: Optional[list[str]] = None, config: Optional[dict] = None) -> dict[str, dict[str, pd.DataFrame]]:
     config = config or load_config()
-    seasons = seasons or config["history"]["seasons"]
+    seasons = seasons or seasons_to_load(config)
     return {season: load_season(season, config) for season in seasons}
 
 
