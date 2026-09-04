@@ -1,5 +1,21 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-09-04 (rolling start-rate lag fix — GW3 prep):**
+`fpl/project/minutes.py::compute_rolling_start_rate` was computing every
+player's start probability from the 3 *completed* archived seasons only,
+never the current one — so a player whose archived tail was an injury /
+benched spell (Wissa: 0.3 xPts flat, a nailed Newcastle starter) got
+`minutes_factor = 0` and was flagged for sale. Fixed by folding the
+current season into the last-6 window (`history_loader.seasons_to_load()`
+now also pulls `config.season`; `compute_rolling_start_rate` reads it if
+present). Minimal by design — "natural last-6", no recency weighting.
+**212 tests passing**, +4 regression tests for this fix. Full detail:
+`docs/PROJECT_LOG.md` §17.
+Residual: vaastav's current-season CSV lags the API ~1 GW, so the
+correction is ~1 GW slower than ideal and self-heals by ~GW7. GW1 & GW2
+`fpl.collect.actuals` + `fpl.evaluate.hindsight` now run (they were not
+wired into `weekly.yml` and still aren't — run manually).
+
 **Status as of 2026-08-22, latest (Phase H H3a+H3b — the transfer
 decision layer):** The tool now answers the weekly question it always
 claimed to: *"I own these 15, I have N free transfers and £X in the bank

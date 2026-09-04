@@ -46,7 +46,10 @@ jobs:
       - name: Collect — live FPL data (bootstrap-static, fixtures)
         run: python -m fpl.collect.fpl_client
 
-      - name: Collect — historical archive (vaastav, 3 seasons)
+      # 3 completed seasons + the current season (PROJECT_LOG §17): the
+      # current season feeds minutes.py's rolling start-rate window so an
+      # in-season role change isn't invisible for weeks. 404s pre-season.
+      - name: Collect — historical archive (vaastav, 3 seasons + current)
         run: python -m fpl.collect.history_loader
 
       # Spec §2.3: conceptually runs immediately after get_bootstrap_static()

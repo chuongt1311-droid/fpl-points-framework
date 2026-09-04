@@ -43,11 +43,23 @@ def compute_rolling_start_rate(players_df: pd.DataFrame, config: dict) -> pd.Dat
     """
     Mean of the `starts` flag over each player's last ROLLING_WINDOW
     real-minutes appearances, chronologically across the pulled seasons
-    (oldest to newest). Pre-season (no current-season matches yet), this is
-    entirely historical — see plan §10 limitation 6: this is backward-
-    looking by construction and will lag an in-season role change.
+    (oldest to newest), INCLUDING the current season once it has started.
+
+    The current season is appended after config.history.seasons (which is
+    deliberately completed-seasons-only, for baseline.py's sake) so a new
+    signing / role change enters the window like any other games: after
+    ROLLING_WINDOW current-season appearances the rate is 100% current.
+    This closes the in-season lag (plan §10 limitation 6) that floored e.g.
+    Wissa to 0.0 — an injury-spell tail at his old club — despite him being
+    nailed at his new one. Pre-season (no current-season merged_gw.csv yet)
+    it is silently skipped and this stays entirely historical.
     """
-    seasons = config["history"]["seasons"]  # already oldest -> newest
+    seasons = list(config["history"]["seasons"])  # already oldest -> newest
+    current_season = config.get("season")
+    if current_season and current_season not in seasons:
+        # Only if vaastav has published it yet (404 pre-season -> no file).
+        if (HIST_DIR / current_season / "gws" / "merged_gw.csv").exists():
+            seasons = seasons + [current_season]
     frames = []
     for order, season in enumerate(seasons):
         path = HIST_DIR / season / "gws" / "merged_gw.csv"
