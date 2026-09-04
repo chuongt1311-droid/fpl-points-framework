@@ -1,5 +1,16 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-09-04, later (per-gameweek dashboard):**
+`scripts/build_dashboard_data.py` was pinned to GW1 (recommendation
+filename + hardcoded deadline); the static dashboard never advanced. Now
+picks the upcoming GW (`select_target_gameweek`), reads the deadline from
+`bootstrap_static.json`, and renders the transfer line from
+`gw{n}_transfers.json`. New `scripts/archive_dashboard_week.py` freezes
+each week's self-contained `index.html` to `dashboard/weeks/gw{N}.html`
+with a generated `weeks/index.html` list; wired into `weekly.yml`. **221
+tests passing.** Detail: `docs/PROJECT_LOG.md` §18. The §13
+recompute-overwrite bug in that script is still open and untouched.
+
 **Status as of 2026-09-04 (rolling start-rate lag fix — GW3 prep):**
 `fpl/project/minutes.py::compute_rolling_start_rate` was computing every
 player's start probability from the 3 *completed* archived seasons only,

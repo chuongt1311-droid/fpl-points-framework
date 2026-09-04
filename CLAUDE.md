@@ -129,7 +129,10 @@ incomplete runs, and joins the season-stable `code` automatically.
   never `index.html` by hand**, then regenerate. Reads only committed
   `data/output/*.json` + `data/processed/*.parquet` + `data/history/` —
   never recomputes (but see the known open item below: the builder
-  currently violates this).
+  currently violates this). Shows the upcoming gameweek
+  (`select_target_gameweek`, PROJECT_LOG §18), not a fixed one.
+  `scripts/archive_dashboard_week.py` then freezes each week's `index.html`
+  to `dashboard/weeks/gw{N}.html` with a generated `weeks/index.html` list.
 - `dashboard/live_server.py` + `dashboard/live/index.html` — **the
   recommended live decision layer.** Flask JSON API + a purpose-built
   frontend for what-if squad exploration (lock/ban/budget/formation/chip,

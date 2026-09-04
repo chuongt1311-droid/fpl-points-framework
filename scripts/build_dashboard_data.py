@@ -15,7 +15,9 @@ this after any pipeline re-run to refresh the dashboard.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
@@ -24,23 +26,77 @@ from fpl.project import project as project_mod
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "data" / "output"
 PROCESSED_DIR = ROOT / "data" / "processed"
+RAW_DIR = ROOT / "data" / "raw"
 DASHBOARD_DIR = ROOT / "dashboard"
 
 N_HORIZON = 5
 N_TICKER = 6
 N_RADAR = 8
 
+_REC_RE = re.compile(r"^gw(\d+)_recommendations\.json$")
+
 
 def r2(x):
     return round(float(x), 2) if pd.notna(x) else None
 
 
+def select_target_gameweek(output_dir: Path, gameweeks: list[int]) -> int:
+    """The gameweek the dashboard should show: the upcoming one if the
+    pipeline has already solved it, else the most recent one it has (the
+    Decide step may not have run since the last GW finished). Was hardcoded
+    to 1 — PROJECT_LOG §18."""
+    solved = sorted(
+        int(m.group(1))
+        for p in output_dir.glob("gw*_recommendations.json")
+        if (m := _REC_RE.match(p.name))
+    )
+    if not solved:
+        raise FileNotFoundError(
+            f"No gw*_recommendations.json under {output_dir} — run the Decide step first."
+        )
+    if gameweeks and gameweeks[0] in solved:
+        return gameweeks[0]
+    return solved[-1]
+
+
+def parse_deadline(bootstrap: dict, gameweek: int) -> Optional[str]:
+    """The ISO deadline for `gameweek` from a bootstrap-static payload, or
+    None if that event isn't present (bootstrap not refreshed yet)."""
+    for event in bootstrap.get("events", []):
+        if event.get("id") == gameweek:
+            return event.get("deadline_time")
+    return None
+
+
+def load_transfer_recommendation(output_dir: Path, gameweek: int) -> Optional[dict]:
+    """gw{n}_transfers.json if a manual `fpl.decide.transfers` run has
+    committed one for this gameweek; None otherwise (it isn't in weekly.yml
+    yet — HANDOFF §9)."""
+    path = output_dir / f"gw{gameweek}_transfers.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main():
     config = project_mod.load_config()
 
+    # ---- which gameweek are we showing? (was hardcoded to 1) ----
+    gameweeks = project_mod.next_n_gameweeks(N_RADAR)
+    target_gw = select_target_gameweek(OUTPUT_DIR, gameweeks)
+    if target_gw not in gameweeks:  # pipeline is behind — anchor everything on what we have
+        gameweeks = list(range(target_gw, target_gw + N_RADAR))
+
     # ---- recommendations + model health: read as-is, never recompute ----
-    squad = json.loads((OUTPUT_DIR / "gw1_recommendations.json").read_text(encoding="utf-8"))
+    squad = json.loads(
+        (OUTPUT_DIR / f"gw{target_gw}_recommendations.json").read_text(encoding="utf-8")
+    )
     health = json.loads((OUTPUT_DIR / "model_health.json").read_text(encoding="utf-8"))
+    transfer = load_transfer_recommendation(OUTPUT_DIR, target_gw)
+
+    bootstrap_path = RAW_DIR / "bootstrap_static.json"
+    bootstrap = json.loads(bootstrap_path.read_text(encoding="utf-8")) if bootstrap_path.exists() else {}
+    deadline_utc = parse_deadline(bootstrap, target_gw)
 
     # ---- Bakeoff tab (v3 plan §9 Phase F, previously unbuilt) — every
     # committed model_health*.json, read as-is. M0's own file has no
@@ -94,7 +150,6 @@ def main():
     players_inputs = project_mod.build_player_inputs(config)
     fixture_mults_full = project_mod.fixtures_mod.compute_fixture_multipliers()
 
-    gameweeks = project_mod.next_n_gameweeks(N_RADAR)
     horizon_gws = gameweeks[:N_HORIZON]
     ticker_gws = gameweeks[:N_TICKER]
     radar_gws = gameweeks[:N_RADAR]
@@ -117,8 +172,10 @@ def main():
     channel_totals.columns = ["id"] + channel_cols
 
     # ---- per-GW projections (already-written artifact, read not recomputed) ----
-    gw1_path = PROCESSED_DIR.parent / "projections" / f"gw{horizon_gws[0]}.parquet"
-    proj = pd.read_parquet(gw1_path)
+    proj_path = PROCESSED_DIR.parent / "projections" / f"gw{target_gw}.parquet"
+    if not proj_path.exists():
+        proj_path = PROCESSED_DIR.parent / "projections" / f"gw{horizon_gws[0]}.parquet"
+    proj = pd.read_parquet(proj_path)
     weighted = project_mod.weighted_horizon_total(proj, config)
 
     baseline_extra = players_raw[[
@@ -212,10 +269,11 @@ def main():
         "meta": {
             "season": config["season"],
             "gameweek": squad["gameweek"],
-            "deadline_utc": "2026-08-21T17:30:00Z",
+            "deadline_utc": deadline_utc,
             "generated_note": "Static snapshot — regenerate via scripts/build_dashboard_data.py after any pipeline re-run.",
         },
         "squad": squad,
+        "transfer": transfer,
         "model_health": health,
         "bakeoff": {
             "champion_model": champion_model,

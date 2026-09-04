@@ -1968,3 +1968,46 @@ a larger change (new column + wiring actuals into `weekly.yml`).
 
 ---
 
+
+## 18. Per-gameweek dashboard + weekly archive (2026-09-04)
+
+### The gap
+
+`scripts/build_dashboard_data.py` read `gw1_recommendations.json` by name
+and hardcoded `deadline_utc = "2026-08-21T17:30:00Z"` (GW1's). The static
+`dashboard/index.html` had never advanced past GW1. `template.html` also
+carried GW1-only copy in the "What to do → Transfer" line.
+
+### What changed (bounded, brainstormed 2026-09-04)
+
+- **`scripts/build_dashboard_data.py`** — new `select_target_gameweek()`
+  (upcoming GW if the Decide step has solved it, else the latest solved),
+  `parse_deadline()` (from the committed `bootstrap_static.json`, no live
+  call), `load_transfer_recommendation()` (`gw{n}_transfers.json` if a
+  manual `transfers.py` run committed one). `main()` anchors every horizon
+  window on the chosen GW; falls back to `horizon_gws[0]` for the
+  projection parquet if `gw{target}.parquet` is missing.
+- **`scripts/archive_dashboard_week.py`** (new) — `index.html` is fully
+  self-contained, so a snapshot is a byte copy to `dashboard/weeks/gw{N}.html`
+  (the one `weeks/index.html` nav link is rewritten to a sibling ref).
+  `rebuild_index()` regenerates a standalone `dashboard/weeks/index.html`
+  list, newest first, parsing each snapshot's inlined `const DATA = …;`
+  line for the GW / captain / XI-total / date. Overwrites within a GW,
+  frozen once the dashboard advances.
+- **`dashboard/template.html`** — Transfer line rendered from
+  `DATA.transfer` (GW1 → initial-build text; GW>1 no artefact → "runs
+  manually" note; roll / OUT→IN otherwise); countdown guards a null
+  deadline; header gains a "past weeks →" link.
+- **`.github/workflows/weekly.yml`** — archive step after the dashboard
+  step; `dashboard/weeks` added to the commit.
+- Tests: `tests/test_dashboard_weekly.py` (new, 9). 221 passing.
+
+### Not touched
+
+The known `build_dashboard_data.py` recompute-and-overwrite of
+`data/processed/*.parquet` (§13) — still open, still a separate defect.
+Verified it produced byte-identical parquets on this run only because the
+pipeline had just run; the FROZEN/LIVE hole is unchanged.
+
+---
+
