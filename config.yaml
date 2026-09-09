@@ -191,6 +191,16 @@ minutes:
   # their minutes_factor capped at this value.
   backup_gk_factor: 0.02
 
+news:
+  # C2 / PROJECT_LOG §22 — LLM parse of FPL's free-text `news` field into a
+  # per-player start probability, consumed ONLY by challenger model m6_news.
+  enabled: true
+  model: "claude-haiku-4-5"   # exact string, no date suffix — short-text extraction
+  prompt_version: 1           # bump when llm_client._SYSTEM / AVAILABILITY_TOOL changes
+  min_confidence: 0.5         # parses below this are discarded → fall back to chance_of_playing
+  # The LLM is hit only on a cache miss (data/news/news_parsed.json). With
+  # no ANTHROPIC_API_KEY set, misses just fall back — deterministic, offline.
+
 data:
   history_seasons: 3
   element_summary_shortlist_size: 150   # never loop all ~700 players — plan §3.1
