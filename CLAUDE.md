@@ -91,6 +91,7 @@ Multiple projection models exist behind one interface
 | M3 `understat_blend` | + Understat npxG/xGChain | Does not beat M2 |
 | M5 `ensemble` | out-of-sample-weighted blend of M0+M2+M3 | Does not beat M2 alone either |
 | M4 `sofascore` | + Sofascore rating | **Abandoned permanently** (2026-08-22) — see "Sofascore" below |
+| M6 `m6_news` | M0 rules + LLM-parsed FPL `news` → start probability (replaces the `chance_of_playing` branch in `minutes.py`) | **Challenger, archived-only** — pre-registered promotion at GW W+6 (`docs/M6_PREREGISTRATION.md`, C2 / PROJECT_LOG §22); M0's live path is byte-identical |
 
 **M0 remains champion until `docs/DECISION_RULE.md`'s pre-registered
 GW12 rule says otherwise — never promote a challenger informally, no

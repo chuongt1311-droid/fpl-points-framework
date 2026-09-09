@@ -2144,3 +2144,51 @@ reads neither — it grades the `recommended` XI/captain against actuals —
 but committing the file is not a blessing of those two fields. The real
 fix is wiring `fpl.decide.transfers` into the pipeline (CLAUDE.md
 known-open), which owns the true per-GW bank/FT state.
+
+## 22. News → minutes signal, challenger model M6 (2026-09-09)
+
+### The gap
+
+`minutes.py` gated start probability on FPL's numeric
+`chance_of_playing_next_round` — null for most players, and one of
+0/25/50/75/100 when present, with no return date. FPL's own free-text
+`news` string ("Knock - 75% chance", "Suspended until 12 Sep", "Expected
+back for the Arsenal game") is richer and unread.
+
+### What changed (C2 — brainstormed + spec'd 2026-09-09)
+
+- **`fpl/collect/llm_client.py`** (new) — one function, `parse_availability`,
+  turns one `news` string into `{start_prob, status, return_gw,
+  confidence, reason}` via a strict forced tool call (model
+  `claude-haiku-4-5`). The only place `ANTHROPIC_API_KEY` is touched.
+- **`fpl/project/news.py`** (new) — `parse_news` walks the bootstrap,
+  hits `data/news/news_parsed.json` (keyed by `sha256(normalize(text))`),
+  calls the LLM only on a miss, writes the result back. Committed cache →
+  re-runs make zero API calls, projections byte-identical. A per-string
+  failure degrades (that player falls through to `chance_of_playing`);
+  `parse_news` never raises. `min_confidence` (0.5) discards weak parses.
+- **`fpl/project/minutes.py`** — `compute_minutes_factor` gains a `model`
+  param; for `model == "m6_news"` a parsed `start_prob` supersedes the
+  `chance_of_playing` branch. It never overrides FPL's hard `i/s/u` zero.
+  **`m0_rules` is byte-identical** — `news.py` isn't even imported;
+  verified by test + an optimiser run (66.29 / 250.17 / Isak, unchanged).
+- **`fpl/project/project.py`** — `m6_news` in the model registry (M0 rates
+  + news minutes, no xG/Understat blend).
+- **`fpl/history/`** — `m6_news` is a challenger partition (`paths.MODELS`,
+  `archive._CHALLENGER_SUBDIRS`). No `model_health` — that's the backtest.
+- **`fpl/evaluate/news_scorecard.py`** (new) — relative Brier of M6 vs M0
+  `minutes_factor` vs actual `starts`, full + news-subset, to
+  `data/output/news_scorecard.json`.
+- **`weekly.yml`** — parse step (before Transform), M6 projection step
+  (before Archive), scorecard step (after hindsight). `data/news` committed.
+- **`config.yaml`** — `news:` block. **`requirements.txt`** — `anthropic`.
+- **`docs/M6_PREREGISTRATION.md`** (new) — promotion criteria, locked
+  before any M6 result. NOT a `DECISION_RULE.md` edit.
+- Tests: `test_llm_client` (3), `test_news` (7), `test_news_scorecard` (2),
+  `test_minutes` (+4), `test_history_archive` (+1). No test hits the network.
+
+### Rollout
+
+M6 is **archived-only** — the Decide step still runs `m0_rules`. After 6
+gameweeks, evaluate against `M6_PREREGISTRATION.md`. Fold in or drop; log
+the outcome here.
