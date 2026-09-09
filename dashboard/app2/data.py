@@ -26,6 +26,7 @@ CONFIG_PATH = ROOT / "config.yaml"
 RAW_DIR = ROOT / "data" / "raw"
 PROJECTIONS_DIR = ROOT / "data" / "projections"
 PROCESSED_DIR = ROOT / "data" / "processed"
+OUTPUT_DIR = ROOT / "data" / "output"
 
 API_BASE = "https://fantasy.premierleague.com/api"
 _CACHE: dict = {}
@@ -139,6 +140,92 @@ def current_squad_view(config: Optional[dict] = None) -> dict:
         "projections_asof": proj_path.name if proj_path else None,
         "picks_event": picks_event,
         "entry_id": entry_id,
+    }
+
+
+def _transfer_out_ids(target_gw: int) -> set[int]:
+    """Player ids the committed gw{n}_transfers.json recommends selling —
+    the source of the 'sell?' verdict on a card. Empty if no such file."""
+    path = OUTPUT_DIR / f"gw{target_gw}_transfers.json"
+    if not path.exists():
+        return set()
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+    return {int(i) for i in rec.get("transfers_out", [])}
+
+
+def points_view(config: Optional[dict] = None) -> dict:
+    """FPL 'Points' screen — last completed GW, ACTUAL points on a pitch.
+    A reshape of squad_snapshot; no model output involved."""
+    config = config or load_config()
+    bootstrap = live_bootstrap()
+    teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
+    elements = {e["id"]: e for e in bootstrap["elements"]}
+
+    event = None
+    for e in bootstrap["events"]:
+        if e.get("finished"):
+            event = e["id"]
+    event = event or 1
+
+    snap = squad_snapshot(event, config)
+    xi, bench = [], []
+    for r in snap["rows"]:
+        card = {
+            "id": r["id"], "web_name": r["web_name"], "position": r["position"],
+            "team_short": teams.get(elements.get(r["id"], {}).get("team"), r.get("team", "?")),
+            "pts": r["points"], "is_captain": r["is_captain"], "is_vice": r["is_vice"],
+        }
+        (bench if r["multiplier"] == 0 else xi).append(card)
+
+    eh = snap.get("entry_history", {})
+    return {
+        "event": event, "xi": xi, "bench": bench,
+        "total": eh.get("points"), "rank": eh.get("overall_rank"),
+        "active_chip": snap.get("active_chip"),
+    }
+
+
+def pick_team_view(config: Optional[dict] = None) -> dict:
+    """FPL 'Pick Team' screen — your current XI/bench on a pitch, with the
+    model's numbers overlaid. A reshape of current_squad_view."""
+    config = config or load_config()
+    bootstrap = live_bootstrap()
+    teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
+    elements = {e["id"]: e for e in bootstrap["elements"]}
+    target_gw = _target_event(bootstrap)
+    sell_ids = _transfer_out_ids(target_gw)
+
+    view = current_squad_view(config)
+    xi, bench = [], []
+    counts = {"GK": 0, "DEF": 0, "MID": 0, "FWD": 0}
+    captain = None
+    for r in view["rows"]:
+        chance = r.get("chance")
+        card = {
+            "id": r["id"], "web_name": r["web_name"], "position": r["position"],
+            "team_short": teams.get(elements.get(r["id"], {}).get("team"), r.get("team", "?")),
+            "xpts": r.get("weighted_xpts"), "next_gw_xpts": r.get("next_gw_xpts"),
+            "start_prob": (chance / 100.0) if chance is not None else None,
+            "status": r.get("status"), "news": r.get("news"),
+            "verdict": "down" if r["id"] in sell_ids else "hold",
+            "is_captain": r["is_captain"], "is_vice": r["is_vice"],
+        }
+        if r["multiplier"] == 0:
+            bench.append(card)
+        else:
+            xi.append(card)
+            counts[r["position"]] += 1
+            if r["is_captain"]:
+                captain = r["web_name"]
+
+    return {
+        "event": target_gw, "xi": xi, "bench": bench,
+        "formation": f"{counts['DEF']}-{counts['MID']}-{counts['FWD']}",
+        "captain": captain,
+        "bank": (view["history"][-1]["bank"] / 10.0) if view.get("history") else None,
     }
 
 
