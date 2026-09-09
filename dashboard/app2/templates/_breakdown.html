@@ -1,0 +1,27 @@
+<div class="breakdown">
+  <h4>{{ b.web_name }} — why the model likes this fixture</h4>
+  <div class="meta">
+    P(60+ mins): <b>{{ b.minutes_factor }}</b> ·
+    Attack mult: <b>{{ b.fixture_attack_mult }}</b> ·
+    Defence mult: <b>{{ b.fixture_defence_mult }}</b>
+  </div>
+  {% set svg_h = b.channels|length * 26 + 10 %}
+  <svg viewBox="0 0 480 {{ svg_h }}" width="480" height="{{ svg_h }}"
+       preserveAspectRatio="xMinYMin meet" class="chbar">
+    {% set vals = b.channels.values() | list %}
+    {% set maxv = (vals | max) if vals else 1 %}
+    {% set minv = (vals | min) if vals else 0 %}
+    {% set span = (maxv if maxv > (0 - minv) else (0 - minv)) %}
+    {% for name, val in b.channels.items() %}
+      {% set y = loop.index0 * 26 + 4 %}
+      {% set w = ((val | abs) / (span if span > 0 else 1) * 220) | round(1) %}
+      <text x="0" y="{{ y + 13 }}" class="chlabel">{{ name }}</text>
+      <rect x="150" y="{{ y }}" width="{{ w }}" height="16"
+            class="{{ 'chbar-pos' if val >= 0 else 'chbar-neg' }}"
+            transform="{{ 'translate(-'+w|string+',0)' if val < 0 else '' }}" />
+      <text x="{{ 155 + w if val >= 0 else 145 - w }}" y="{{ y + 13 }}"
+            class="chval" text-anchor="{{ 'start' if val >= 0 else 'end' }}">{{ val }}</text>
+    {% endfor %}
+  </svg>
+  <div class="chtotal">Total this fixture: <b>{{ b.total }}</b> pts</div>
+</div>

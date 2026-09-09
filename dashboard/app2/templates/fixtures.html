@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+  <style>
+    .radar{display:grid;grid-template-columns:70px repeat({{ radar.events|length }}, 1fr);gap:4px;max-width:640px}
+    .radar .hd{font-size:11px;color:var(--muted);text-align:center;padding:4px}
+    .radar .team{font-size:12px;font-weight:600;display:flex;align-items:center}
+  </style>
+  <h1>Fixtures</h1>
+  <div class="sub">Difficulty for your clubs, next {{ radar.events|length }} gameweeks.</div>
+
+  <div class="radar">
+    <div class="hd"></div>
+    {% for gw in radar.events %}<div class="hd">GW{{ gw }}</div>{% endfor %}
+    {% for row in radar.grid %}
+      <div class="team">{{ row.team }}</div>
+      {% for c in row.cells %}
+        <div class="cell {{ 'diff-' + c.difficulty|string if c.difficulty else 'diff-none' }}">{{ c.label }}</div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  <div class="footnote">FPL's 1–5 difficulty rating — the only fixture signal live right now; the model's `strength_*` ratings are still unpublished this early in the season (see Model Health on the static dashboard).</div>
+{% endblock %}
