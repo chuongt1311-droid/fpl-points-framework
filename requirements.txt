@@ -1,3 +1,4 @@
+anthropic==1.4.0   # C2 / PROJECT_LOG §22 — news-field parse (fpl/collect/llm_client.py)
 requests==2.32.3
 pandas==2.2.3
 pyarrow==17.0.0

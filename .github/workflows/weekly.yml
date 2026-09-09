@@ -92,6 +92,15 @@ jobs:
                   actuals.collect_gameweek_actuals(e["id"])
           PY
 
+      # PROJECT_LOG §22: parse FPL's free-text `news` field into a structured
+      # start-probability, cached by a hash of the text (data/news/). Consumed
+      # only by challenger model m6_news. Degrades to cache-only if the secret
+      # is unset — must not fail the job.
+      - name: Parse — team news (model M6 input)
+        run: python -m fpl.project.news
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
       - name: Transform — players + fixtures tables
         run: |
           python -m fpl.transform.build_players
@@ -107,6 +116,20 @@ jobs:
       # not-yet-built script for that job.
       - name: Decide — squad/XI/captain recommendations
         run: python -m fpl.decide.optimiser
+
+      # PROJECT_LOG §22: the M6 challenger projection (M0 rules + news-aware
+      # minutes) into data/projections/m6_news/. Archived-only — never a
+      # decision input. Parallels how M2/M3 would be produced; only M6 is
+      # wired for now.
+      - name: Project — M6 challenger (m6_news)
+        run: |
+          python - <<'PY'
+          from fpl.project import project as p
+          cfg = p.load_config()
+          p.project_gameweeks(cfg["horizon"]["gameweeks"], cfg, model="m6_news")
+          PY
+        env:
+          PYTHONPATH: "."
 
       # Phase G (docs/superpowers/specs/2026-08-22-history-layer-design.md):
       # append-only, provenance-stamped, hive-partitioned archive. Replaces
@@ -126,6 +149,15 @@ jobs:
       # deliberately never schedules (see the Decide step's note + DECISION_RULE).
       - name: Evaluate — per-GW hindsight regret for settled gameweeks
         run: python -m fpl.evaluate.hindsight all
+
+      # PROJECT_LOG §22: relative Brier of M6 vs M0 minutes_factor against
+      # the actual `starts` flag, full + news-signal subset. Feeds the
+      # docs/M6_PREREGISTRATION.md promotion check. Skips a GW with no
+      # actuals; never fails the job.
+      - name: Evaluate — M6 vs M0 news scorecard
+        run: python -m fpl.evaluate.news_scorecard all
+        env:
+          PYTHONPATH: "."
 
       # Phase G: reads data/history/ via fpl.history.query only. Runs BEFORE
       # the dashboard build so this run's history.json is the one embedded
@@ -159,7 +191,7 @@ jobs:
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots data/history data/actuals data/state dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
+          git add data/processed data/projections data/output data/snapshots data/history data/actuals data/state data/news dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else

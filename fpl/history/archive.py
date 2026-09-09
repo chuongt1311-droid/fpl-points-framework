@@ -36,7 +36,10 @@ RAW_DIR = REPO_ROOT / "data" / "raw"
 
 # m0_rules lives at the root of data/projections/ (it is project.py's
 # default path); challengers live in named subdirectories.
-_CHALLENGER_SUBDIRS = {"m2_xg": "m2_xg", "m3_understat": "m3_understat"}
+_CHALLENGER_SUBDIRS = {"m2_xg": "m2_xg", "m3_understat": "m3_understat", "m6_news": "m6_news"}
+# m6_news (C2 / PROJECT_LOG §22) is deliberately absent from _HEALTH_FILES —
+# it produces no model_health.json (that is fpl.evaluate.backtest, which the
+# pipeline never schedules). Projections only.
 _HEALTH_FILES = {
     "m0_rules": "model_health.json",
     "m2_xg": "model_health_m2_xg.json",

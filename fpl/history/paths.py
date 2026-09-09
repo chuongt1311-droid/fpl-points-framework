@@ -26,7 +26,7 @@ ASOF_FORMAT = "%Y%m%dT%H%M%SZ"
 # Matches the model registry in CLAUDE.md. m0_rules is the champion and
 # the pipeline's default (written to data/projections/gw{n}.parquet with
 # no model subdirectory); the other two live in named subdirectories.
-MODELS = ("m0_rules", "m2_xg", "m3_understat")
+MODELS = ("m0_rules", "m2_xg", "m3_understat", "m6_news")
 
 
 def format_asof(dt: datetime) -> str:

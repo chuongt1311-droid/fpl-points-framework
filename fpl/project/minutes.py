@@ -155,9 +155,22 @@ def compute_rolling_start_rate(players_df: pd.DataFrame, config: dict) -> pd.Dat
     return out
 
 
-def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = None) -> pd.DataFrame:
+def compute_minutes_factor(
+    players_df: pd.DataFrame, config: Optional[dict] = None, model: str = "m0_rules"
+) -> pd.DataFrame:
     config = config or load_config()
     start_rates = compute_rolling_start_rate(players_df, config)
+
+    # M6 (m6_news) ONLY: a parsed-news start probability. Lazily imported so
+    # the live path (m0_rules) never even loads news.py. C2 / PROJECT_LOG §22.
+    news_prob = None
+    if model == "m6_news":
+        from fpl.project import news as news_mod
+
+        news_signal, _health = news_mod.parse_news(players_df, config)
+        news_prob = players_df[["id"]].merge(
+            news_signal[["id", "news_start_prob"]], on="id", how="left"
+        )["news_start_prob"].reset_index(drop=True)
 
     # HANDOFF.md §5 finding #6: build_players.py's own docstring promises
     # "keep if present" for every ELEMENT_COLUMNS entry — it degrades
@@ -201,10 +214,22 @@ def compute_minutes_factor(players_df: pd.DataFrame, config: Optional[dict] = No
 
     factor = pd.Series(float("nan"), index=out.index)
     factor = factor.where(~unavailable, 0.0)
-    factor = factor.where(unavailable | ~has_chance, chance / 100.0)
-    factor = factor.where(~doubtful_no_chance, 0.5)
+
+    # M6 news branch, above chance_of_playing. Only where FPL hasn't already
+    # zeroed the player (hard i/s/u) — the parse only moves a player WITHIN
+    # the available-but-doubtful space, never overrides a hard unavailable.
+    # For model != "m6_news", news_prob is None → this is a no-op and the
+    # rest of the chain is byte-identical to before (every `factor.notna()`
+    # guard below is False because factor is all-NaN at that point).
+    if news_prob is not None:
+        news_prob = pd.Series(news_prob.to_numpy(), index=out.index)
+        apply_news = news_prob.notna() & ~unavailable
+        factor = factor.mask(apply_news, news_prob)
+
+    factor = factor.where(unavailable | ~has_chance | factor.notna(), chance / 100.0)
+    factor = factor.where(~doubtful_no_chance | factor.notna(), 0.5)
     fallback = ~unavailable & ~has_chance & ~doubtful_no_chance
-    factor = factor.where(~fallback, out["rolling_start_rate"])
+    factor = factor.where(~fallback | factor.notna(), out["rolling_start_rate"])
 
     out["minutes_factor"] = factor
     out = apply_gk_backup_override(out, players_df, config)

@@ -1,6 +1,22 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-09-09, latest (per-GW hindsight on the schedule):**
+**Status as of 2026-09-09, latest (C2 — news → minutes, challenger M6):**
+FPL's free-text `news` field is now parsed by an LLM
+(`fpl/collect/llm_client.py`, model `claude-haiku-4-5`) into a per-player
+start probability, hash-cached in `data/news/news_parsed.json` (committed;
+zero API calls on re-run). Consumed only by new challenger model
+**`m6_news`** — `compute_minutes_factor(..., model="m6_news")` uses it in
+place of the `chance_of_playing` branch, never over FPL's hard `i/s/u`
+zero. **M0 is byte-identical** (news.py not imported; optimiser run
+unchanged at 66.29 / 250.17 / Isak). M6 archived every run alongside
+M2/M3; `data/output/news_scorecard.json` tracks M6-vs-M0 Brier vs actual
+`starts`. Promotion criteria locked in `docs/M6_PREREGISTRATION.md`
+(evaluate at GW W+6). Needs the `ANTHROPIC_API_KEY` repo secret; degrades
+to cache-only without it (the cache ships empty — first CI run with the
+secret populates it). **251 tests passing.** Detail: `docs/PROJECT_LOG.md`
+§22. Branch `feat/c2-news-minutes-signal` (PR pending).
+
+**Status as of 2026-09-09, earlier (per-GW hindsight on the schedule):**
 `fpl.evaluate.hindsight` only ran by hand. New
 `compute_settled_hindsight(bootstrap)` + a `weekly.yml` step grade every
 settled GW that has a committed `data/state/squad_gw{n}.json` (now in the
