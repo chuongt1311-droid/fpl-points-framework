@@ -35,6 +35,7 @@ factor, applied once per term — never twice.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 from typing import Optional
@@ -72,12 +73,71 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def next_n_gameweeks(n: int) -> list[int]:
+def _parse_deadline(value) -> Optional[dt.datetime]:
+    """FPL deadlines are ISO 8601 with a literal `Z`. Returns None (meaning
+    "no usable deadline, fall back to the finished flag") for anything this
+    can't read, rather than raising — same "keep if present, degrade
+    gracefully" contract the transform layer uses for optional fields."""
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def next_n_gameweeks(n: int, now: Optional[str | dt.datetime] = None) -> list[int]:
+    """
+    The next `n` gameweeks this squad can still be changed for.
+
+    GATES ON THE DEADLINE, NOT JUST `finished` (2026-08-25). FPL flips an
+    event's `finished`/`data_checked` when its own post-gameweek review
+    completes, NOT at the final whistle — and that review can lag for days.
+    Observed live: four days after the GW1 deadline, with all ten GW1
+    fixtures carrying finished=True and provisional bonus awarded, GW1's
+    EVENT still read finished=False, is_current=True, and teams[].played=0.
+    Filtering on `finished` alone therefore returned [1,2,3,4,5] and made
+    every scheduled run re-project, re-solve and re-archive a gameweek that
+    was already unactionable — see commit 037fce9, which overwrote
+    data/output/gw1_recommendations.json and archived a decision under
+    gw=1 while its own run.json recorded target_gameweek=2.
+
+    The condition that actually matters to a decision layer is not "has FPL
+    finished grading this" but "can the manager still act on this". Once the
+    deadline passes the team is locked, so the gameweek is not a decision
+    target regardless of what the grading flags say. `finished` is kept as
+    an additional filter (it is authoritative for gameweeks whose deadline
+    is somehow still in the future, and costs nothing), and an event with no
+    readable deadline falls back to it alone.
+
+    Deliberately NOT changed alongside this: fpl.collect.actuals still gates
+    on finished AND data_checked. That is a different question — actuals are
+    about whether BONUS IS SETTLED, and grading lag is exactly the thing it
+    is right to wait for. See that module's docstring.
+    """
     path = RAW_DIR / "bootstrap_static.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     events = sorted(data["events"], key=lambda e: e["id"])
-    unfinished = [e["id"] for e in events if not e.get("finished")]
-    return unfinished[:n]
+
+    if now is None:
+        now_dt = dt.datetime.now(dt.timezone.utc)
+    elif isinstance(now, str):
+        now_dt = _parse_deadline(now)
+    else:
+        now_dt = now
+    if now_dt is not None and now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=dt.timezone.utc)
+
+    upcoming = []
+    for e in events:
+        if e.get("finished"):
+            continue
+        deadline = _parse_deadline(e.get("deadline_time"))
+        # `<=`: at the deadline the team is already locked.
+        if deadline is not None and now_dt is not None and deadline <= now_dt:
+            continue
+        upcoming.append(e["id"])
+    return upcoming[:n]
 
 
 def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:

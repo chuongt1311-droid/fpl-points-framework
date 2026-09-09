@@ -35,6 +35,7 @@ Then open http://127.0.0.1:5000/
 from __future__ import annotations
 
 import datetime as dt
+import os
 import sys
 from pathlib import Path
 
@@ -197,4 +198,9 @@ def api_solve():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Respect $PORT when the launcher assigns one dynamically (e.g. the
+    # Claude Code preview tool's autoPort, when 5000 is already taken by
+    # something else) — 5000 stays the local default for a plain `python
+    # -m dashboard.live_server` run outside that tooling.
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, port=port)
