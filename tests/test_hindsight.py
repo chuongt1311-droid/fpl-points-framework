@@ -144,3 +144,49 @@ def test_regret_decomposition_sums_to_total(tmp_path, monkeypatch):
     assert (tmp_path / "hindsight_gw1.json").exists()
     on_disk = json.loads((tmp_path / "hindsight_gw1.json").read_text(encoding="utf-8"))
     assert on_disk["regret"]["total"] == r["total"]
+
+
+def _setup_gw1_only(tmp_path, monkeypatch):
+    """The full synthetic GW1 fixture from the test above, factored out."""
+    ids, position = _squad_of_15()
+    monkeypatch.setattr(squad_state_mod, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(hindsight, "PROCESSED_DIR", tmp_path)
+    monkeypatch.setattr(hindsight, "ACTUALS_DIR", tmp_path)
+    monkeypatch.setattr(hindsight, "SNAPSHOT_DIR", tmp_path)
+    monkeypatch.setattr(hindsight, "OUTPUT_DIR", tmp_path)
+    actual_points = {i: (i % 7) + 1 for i in ids}
+    rows = [{"code": i, "id": i, "event": 1, "minutes": 90, "total_points": actual_points[i]} for i in ids]
+    pd.DataFrame(rows).to_csv(tmp_path / "actuals_test.csv", index=False)
+    monkeypatch.setattr(hindsight, "load_config", lambda: {
+        "season": "test", "squad_rules": {
+            "budget_tenths": 1000, "total": 15, "gk": 2, "def": 5, "mid": 5, "fwd": 3, "max_per_club": 3,
+            "starting_xi": RULES["starting_xi"],
+        },
+        "optimiser": {"allow_low_confidence": True, "bench_weight_epsilon": 0.0},
+    })
+    squad_state_mod.write_squad_state(1, {
+        "squad": ids, "starting_xi": [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15],
+        "captain": 8, "vice_captain": 9,
+    }, bank=0.0)
+    pd.DataFrame([{"id": i, "code": i, "position": position[i], "team": i, "price": 5.0} for i in ids]).to_parquet(
+        tmp_path / "players.parquet", index=False)
+
+
+def test_compute_settled_hindsight_evaluates_ready_gws_and_skips_the_rest(tmp_path, monkeypatch):
+    """Wired into weekly.yml: loop every finished+data_checked gameweek,
+    grade the ones we have a squad state + actuals for, and quietly skip the
+    rest — a missing squad state (GW2, no transfers.py yet) or an unsettled
+    GW must not fail the pipeline job."""
+    _setup_gw1_only(tmp_path, monkeypatch)
+    bootstrap = {"events": [
+        {"id": 1, "finished": True, "data_checked": True},   # ready + fixtured
+        {"id": 2, "finished": True, "data_checked": True},    # ready, but no squad state
+        {"id": 3, "finished": True, "data_checked": False},   # not settled
+        {"id": 4, "finished": False, "data_checked": False},  # not played
+    ]}
+
+    evaluated = hindsight.compute_settled_hindsight(bootstrap)
+
+    assert evaluated == [1]
+    assert (tmp_path / "hindsight_gw1.json").exists()
+    assert not (tmp_path / "hindsight_gw2.json").exists()

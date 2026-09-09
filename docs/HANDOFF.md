@@ -1,6 +1,17 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-09-09, latest (rolling start-rate — our actuals over vaastav):**
+**Status as of 2026-09-09, latest (per-GW hindsight on the schedule):**
+`fpl.evaluate.hindsight` only ran by hand. New
+`compute_settled_hindsight(bootstrap)` + a `weekly.yml` step grade every
+settled GW that has a committed `data/state/squad_gw{n}.json` (now in the
+commit list), skipping the rest without failing the job. `model_health`
+stays OFF the schedule (it is the retrospective backtest — DECISION_RULE).
+Known limitation logged: `squad_gw{n}.json` for n ≥ 2 has bogus
+`bank`/`free_transfers` (the transfers-not-wired gap); hindsight doesn't
+read them. **234 tests.** Detail: `docs/PROJECT_LOG.md` §21. Branch
+`feat/weekly-hindsight` (PR pending).
+
+**Status as of 2026-09-09, earlier (rolling start-rate — our actuals over vaastav):**
 `compute_rolling_start_rate` read the current season only from vaastav's
 `merged_gw.csv`, which lags the FPL API ~1 GW — so §17's current-season
 fix was starved of data and Wissa still projected 0.99 xPts for GW4.
