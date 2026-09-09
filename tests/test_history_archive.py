@@ -137,3 +137,17 @@ def test_missing_challenger_models_are_skipped_not_faked(tmp_path, monkeypatch):
     archive.archive_run(now=NOW)
     assert (hist / "projections" / "gw=1" / f"asof={ASOF}" / "model=m0_rules").exists()
     assert not (hist / "projections" / "gw=1" / f"asof={ASOF}" / "model=m2_xg").exists()
+
+
+def test_discover_artefacts_picks_up_m6_news_projections(tmp_path, monkeypatch):
+    """m6_news is a challenger partition (C2 / §22) — archived from
+    data/projections/m6_news/ alongside m2_xg / m3_understat, with no
+    model_health.json of its own."""
+    _seed(tmp_path, monkeypatch, with_challengers=False)
+    m6 = archive.PROJECTIONS_DIR / "m6_news"
+    m6.mkdir()
+    pd.DataFrame({"id": [1], "event": [1], "xpts": [3.0]}).to_parquet(m6 / "gw1.parquet", index=False)
+
+    got = archive.discover_artefacts()
+    assert (1, "m6_news", m6 / "gw1.parquet") in got["projections"]
+    assert not any(m == "m6_news" for _, m, _ in got["health"])

@@ -57,4 +57,4 @@ def test_runs_dir_is_underscore_prefixed_so_hive_globs_skip_it(tmp_path, monkeyp
 
 
 def test_models_constant_matches_the_registry():
-    assert paths.MODELS == ("m0_rules", "m2_xg", "m3_understat")
+    assert paths.MODELS == ("m0_rules", "m2_xg", "m3_understat", "m6_news")
