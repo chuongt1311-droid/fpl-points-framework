@@ -22,9 +22,18 @@ def _event_live() -> dict:
     return {"elements": [
         {"id": 1, "stats": {"minutes": 90, "total_points": 8, "goals_scored": 1, "assists": 0,
                              "clean_sheets": 1, "goals_conceded": 0, "saves": 0, "bonus": 2,
-                             "bps": 30, "yellow_cards": 0, "red_cards": 0, "defensive_contribution": 0}},
+                             "bps": 30, "yellow_cards": 0, "red_cards": 0, "defensive_contribution": 0,
+                             "starts": 1}},
         {"id": 2, "stats": {"minutes": 0, "total_points": 0}},  # unused stats default via .get
     ]}
+
+
+def test_build_actuals_rows_records_the_starts_flag():
+    """minutes.py's rolling-start-rate window needs current-season `starts`
+    the moment a GW is graded — vaastav's merged_gw.csv lags the API by ~1 GW."""
+    rows = actuals.build_actuals_rows(1, _event_live(), _bootstrap(finished=True, data_checked=True))
+    assert rows[rows["id"] == 1].iloc[0]["starts"] == 1
+    assert rows[rows["id"] == 2].iloc[0]["starts"] == 0  # missing -> 0, not NaN
 
 
 def test_gameweek_is_ready_requires_both_finished_and_data_checked():

@@ -39,6 +39,10 @@ STAT_COLUMNS = [
     "minutes", "total_points", "goals_scored", "assists", "clean_sheets",
     "goals_conceded", "saves", "bonus", "bps", "yellow_cards", "red_cards",
     "defensive_contribution",
+    # `starts` (0/1): feeds fpl/project/minutes.py's rolling-start-rate
+    # window for the current season, which otherwise waits ~1 GW for
+    # vaastav's merged_gw.csv to republish (PROJECT_LOG §20).
+    "starts",
 ]
 
 ACTUALS_COLUMNS = ["code", "id", "event"] + STAT_COLUMNS

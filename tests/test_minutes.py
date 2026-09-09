@@ -77,6 +77,12 @@ def _write_players_raw(dir_path, id_to_code: dict) -> None:
     )
 
 
+def _write_actuals(actuals_dir, season: str, rows: list[dict]) -> None:
+    """rows: dicts with id, event, minutes, starts."""
+    actuals_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(actuals_dir / f"actuals_{season}.csv", index=False, encoding="utf-8")
+
+
 def test_rolling_start_rate_blends_current_season_over_stale_history(tmp_path, monkeypatch):
     """Real bug regression: compute_rolling_start_rate read ONLY the archived
     `history.seasons` and never the current season, so a player whose last 6
@@ -88,6 +94,7 @@ def test_rolling_start_rate_blends_current_season_over_stale_history(tmp_path, m
     The current season must enter the rolling window like any other games:
     last 6 of [4 old cameos (starts 0), 2 new starts] -> 2/6."""
     monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
     monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
 
     _write_merged_gw(tmp_path / "2025-26", [
@@ -114,6 +121,7 @@ def test_rolling_start_rate_pre_season_is_pure_historical(tmp_path, monkeypatch)
     """Guard: with no current-season CSV yet (pre-season, or config has no
     `season`), behaviour is unchanged — pure archived history, no crash."""
     monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
     monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
 
     _write_merged_gw(tmp_path / "2025-26", [
@@ -127,6 +135,88 @@ def test_rolling_start_rate_pre_season_is_pure_historical(tmp_path, monkeypatch)
 
     out = minutes_mod.compute_rolling_start_rate(players, config)
     assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(1.0)
+
+
+def test_rolling_start_rate_prefers_fresh_actuals_over_lagging_vaastav(tmp_path, monkeypatch):
+    """Real bug regression (PROJECT_LOG §20): vaastav's current-season
+    merged_gw.csv lags the FPL API by ~1 GW. Our own data/actuals/ has the
+    graded GW the moment it settles. When actuals covers more current-season
+    gameweeks than vaastav, it is used instead.
+
+    3 stale injury cameos (starts 0). vaastav shows only GW1, actuals shows
+    GW1-2 (kept below the current-season-only threshold so the blend is
+    visible): with actuals the window is [3 cameos(0), 2 starts(1)] = 2/5;
+    on vaastav alone it would be [3 cameos(0), 1 start(1)] = 1/4."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    _write_merged_gw(tmp_path / "2025-26", [
+        {"element": 50, "minutes": m, "starts": 0, "GW": gw}
+        for gw, m in zip(range(36, 39), [12, 8, 20])
+    ])
+    _write_players_raw(tmp_path / "2025-26", {50: 999})
+    _write_merged_gw(tmp_path / "2026-27", [{"element": 7, "minutes": 90, "starts": 1, "GW": 1}])
+    _write_players_raw(tmp_path / "2026-27", {7: 999})
+    _write_actuals(tmp_path / "actuals", "2026-27", [
+        {"id": 7, "event": gw, "minutes": 90, "starts": 1} for gw in (1, 2)
+    ])
+
+    config = {"history": {"seasons": ["2025-26"]}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02}}
+    players = _players([{"id": 7, "code": 999}])
+
+    out = minutes_mod.compute_rolling_start_rate(players, config)
+    assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(2 / 5)
+
+
+def test_rolling_start_rate_window_is_current_season_only_past_the_threshold(tmp_path, monkeypatch):
+    """Once a player has CURRENT_SEASON_ONLY_AFTER current-season appearances,
+    the window is drawn from the current season alone — a stale cross-club
+    history tail no longer counts. 6 old benched apps (starts 0) + 3 fresh
+    starts -> 1.0, not the 3/6 a blended last-6 would give."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    _write_merged_gw(tmp_path / "2025-26", [
+        {"element": 50, "minutes": 15, "starts": 0, "GW": gw} for gw in range(1, 7)
+    ])
+    _write_players_raw(tmp_path / "2025-26", {50: 999})
+    _write_actuals(tmp_path / "actuals", "2026-27", [
+        {"id": 7, "event": gw, "minutes": 90, "starts": 1} for gw in (1, 2, 3)
+    ])
+
+    config = {"history": {"seasons": ["2025-26"]}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02}}
+    players = _players([{"id": 7, "code": 999}])
+
+    out = minutes_mod.compute_rolling_start_rate(players, config)
+    assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(1.0)
+
+
+def test_rolling_start_rate_below_threshold_still_blends_history(tmp_path, monkeypatch):
+    """Guard: with fewer than CURRENT_SEASON_ONLY_AFTER current-season apps,
+    the blended last-6 behaviour is unchanged (2 fresh starts don't yet
+    override a benched history)."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    _write_merged_gw(tmp_path / "2025-26", [
+        {"element": 50, "minutes": 15, "starts": 0, "GW": gw} for gw in range(1, 7)
+    ])
+    _write_players_raw(tmp_path / "2025-26", {50: 999})
+    _write_actuals(tmp_path / "actuals", "2026-27", [
+        {"id": 7, "event": gw, "minutes": 90, "starts": 1} for gw in (1, 2)
+    ])
+
+    config = {"history": {"seasons": ["2025-26"]}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02}}
+    players = _players([{"id": 7, "code": 999}])
+
+    out = minutes_mod.compute_rolling_start_rate(players, config)
+    assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(2 / 6)
 
 
 def test_apply_gk_backup_override_re_promotes_backup_when_number_one_is_injured():

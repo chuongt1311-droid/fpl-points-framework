@@ -26,8 +26,14 @@ from fpl.transform import build_players
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 HIST_DIR = Path(__file__).resolve().parents[2] / "data" / "raw" / "history"
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+ACTUALS_DIR = Path(__file__).resolve().parents[2] / "data" / "actuals"
 
 ROLLING_WINDOW = 6
+# Once a player has this many current-season minutes>0 appearances, the
+# rolling window is taken from the current season ALONE — enough games to
+# establish the current role, so a stale cross-club history tail (an injury
+# spell at the old club, a promotion from the U21s) stops dragging the rate.
+CURRENT_SEASON_ONLY_AFTER = 3
 # No history at all (brand new to the league, or literally never started a
 # match in the pulled window): neither confident nor a guaranteed bench
 # player. Documented limitation, not a silent 0 or 1 — see plan §10 limitation 6.
@@ -39,6 +45,40 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _archived_season_appearances(season: str, players_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    """minutes>0 appearances from vaastav's merged_gw.csv, bridged to the
+    current-season id (its `element` column is NOT stable across seasons)."""
+    path = HIST_DIR / season / "gws" / "merged_gw.csv"
+    if not path.exists():
+        return None
+    gw = pd.read_csv(path, encoding="utf-8")
+    gw = gw[gw["minutes"] > 0]
+    bridged = identity.attach_current_player_id(gw, season, players_df)
+    return bridged[["current_id", "GW", "starts"]]
+
+
+def _current_season_appearances(
+    season: str, players_df: pd.DataFrame, actuals_path: Optional[Path]
+) -> Optional[pd.DataFrame]:
+    """minutes>0 appearances for the current season, preferring our own
+    graded actuals over vaastav's merged_gw.csv when actuals covers at least
+    as many gameweeks — vaastav lags the FPL API by ~1 GW (PROJECT_LOG §20).
+    Current-season ids ARE the FPL ids in players_df, so no identity bridge."""
+    archived = _archived_season_appearances(season, players_df)
+    if actuals_path is None or not actuals_path.exists():
+        return archived
+
+    act = pd.read_csv(actuals_path, encoding="utf-8")
+    act = act[act["minutes"] > 0]
+    known = set(players_df["id"])
+    act = act[act["id"].isin(known)]
+    actuals_frame = act.rename(columns={"id": "current_id", "event": "GW"})[["current_id", "GW", "starts"]]
+
+    if archived is not None and archived["GW"].nunique() > actuals_frame["GW"].nunique():
+        return archived
+    return actuals_frame
+
+
 def compute_rolling_start_rate(players_df: pd.DataFrame, config: dict) -> pd.DataFrame:
     """
     Mean of the `starts` flag over each player's last ROLLING_WINDOW
@@ -47,29 +87,45 @@ def compute_rolling_start_rate(players_df: pd.DataFrame, config: dict) -> pd.Dat
 
     The current season is appended after config.history.seasons (which is
     deliberately completed-seasons-only, for baseline.py's sake) so a new
-    signing / role change enters the window like any other games: after
-    ROLLING_WINDOW current-season appearances the rate is 100% current.
-    This closes the in-season lag (plan §10 limitation 6) that floored e.g.
-    Wissa to 0.0 — an injury-spell tail at his old club — despite him being
-    nailed at his new one. Pre-season (no current-season merged_gw.csv yet)
-    it is silently skipped and this stays entirely historical.
+    signing / role change enters the window like any other games. This
+    closes the in-season lag (plan §10 limitation 6) that floored e.g.
+    Wissa to ~0 — an injury-spell tail at his old club — despite him being
+    nailed at his new one. Two refinements keep that lag short (PROJECT_LOG §20):
+
+    - The current season's appearances come from our own graded
+      data/actuals/ in preference to vaastav's merged_gw.csv whenever
+      actuals covers at least as many gameweeks — vaastav republishes ~1 GW
+      behind the FPL API.
+    - Once a player has CURRENT_SEASON_ONLY_AFTER current-season
+      appearances, the window is drawn from the current season ALONE, so a
+      stale cross-club history tail stops counting.
+
+    Pre-season (neither source has the current season yet) this is silently
+    skipped and stays entirely historical.
     """
     seasons = list(config["history"]["seasons"])  # already oldest -> newest
     current_season = config.get("season")
+    current_actuals = ACTUALS_DIR / f"actuals_{current_season}.csv" if current_season else None
     if current_season and current_season not in seasons:
-        # Only if vaastav has published it yet (404 pre-season -> no file).
-        if (HIST_DIR / current_season / "gws" / "merged_gw.csv").exists():
+        # Append the current season if EITHER source has it yet: vaastav's
+        # merged_gw.csv (404s pre-season) or our own graded actuals. Actuals
+        # settle ~1 GW before vaastav republishes, so once real gameweeks
+        # start this is usually the one that exists first.
+        has_vaastav = (HIST_DIR / current_season / "gws" / "merged_gw.csv").exists()
+        has_actuals = current_actuals is not None and current_actuals.exists()
+        if has_vaastav or has_actuals:
             seasons = seasons + [current_season]
+    current_order = len(seasons) - 1 if seasons and seasons[-1] == current_season else None
+
     frames = []
     for order, season in enumerate(seasons):
-        path = HIST_DIR / season / "gws" / "merged_gw.csv"
-        if not path.exists():
-            continue
-        gw = pd.read_csv(path, encoding="utf-8")
-        gw = gw[gw["minutes"] > 0]
-        bridged = identity.attach_current_player_id(gw, season, players_df)
-        bridged["season_order"] = order
-        frames.append(bridged[["current_id", "season_order", "GW", "starts"]])
+        if order == current_order:
+            frame = _current_season_appearances(season, players_df, current_actuals)
+        else:
+            frame = _archived_season_appearances(season, players_df)
+        if frame is not None:
+            frame["season_order"] = order
+            frames.append(frame[["current_id", "season_order", "GW", "starts"]])
 
     if not frames:
         rates = pd.DataFrame(columns=["id", "rolling_start_rate", "appearances_in_window"])
@@ -78,6 +134,12 @@ def compute_rolling_start_rate(players_df: pd.DataFrame, config: dict) -> pd.Dat
         all_hist = all_hist.sort_values(["current_id", "season_order", "GW"])
 
         def _last_n_start_rate(group: pd.DataFrame) -> pd.Series:
+            # Past the threshold, draw the window from the current season
+            # alone so a stale cross-club history tail stops dragging.
+            if current_order is not None:
+                current = group[group["season_order"] == current_order]
+                if len(current) >= CURRENT_SEASON_ONLY_AFTER:
+                    group = current
             tail = group.tail(ROLLING_WINDOW)
             return pd.Series({
                 "rolling_start_rate": tail["starts"].mean(),
