@@ -49,11 +49,20 @@ def resolve_sell_prices(
 ) -> tuple[dict[int, float], str]:
     """Per-player sell price + where it came from. The pasted my_team.json's
     `sell_prices` when we have a fresh file; otherwise current market price
-    (`now_cost`) as a proxy — an over-estimate for risers, exact otherwise."""
+    as a proxy — an over-estimate for risers, exact otherwise.
+
+    `players_raw` is the processed players table (`price`, already in £m). A
+    raw bootstrap frame (`now_cost`, tenths) is also accepted so either
+    source works — the processed table is what main() actually passes, and
+    it is the one that lacked `now_cost` (KeyError on the market path, only
+    reached once my_team.json goes stale / in CI where it never exists)."""
     if my_team and my_team.get("sell_prices"):
         sp = my_team["sell_prices"]
         return {int(i): float(sp[i]) for i in sp}, "my_team_file"
-    market = dict(zip(players_raw["id"], players_raw["now_cost"] / 10.0))
+    if "price" in players_raw.columns:
+        market = dict(zip(players_raw["id"], players_raw["price"]))
+    else:
+        market = dict(zip(players_raw["id"], players_raw["now_cost"] / 10.0))
     return {int(i): round(float(market.get(i, 0.0)), 1) for i in squad_ids}, "market"
 
 

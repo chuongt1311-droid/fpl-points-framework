@@ -55,7 +55,18 @@ def test_resolve_sell_prices_uses_pasted_values_when_present():
 
 
 def test_resolve_sell_prices_falls_back_to_market_when_no_file():
+    """Raw-bootstrap frame (now_cost, tenths) — the accepted alternative shape."""
     players_raw = pd.DataFrame({"id": [1, 2], "now_cost": [55, 60]})
+    prices, source = bmt.resolve_sell_prices([1, 2], players_raw, None)
+    assert prices == {1: 5.5, 2: 6.0}
+    assert source == "market"
+
+
+def test_resolve_sell_prices_market_reads_processed_price_column():
+    """Regression: main() passes data/processed/players.parquet, which has
+    `price` (£m) and NO `now_cost`. The market path used to KeyError on it —
+    only reached once my_team.json goes stale, or in CI where it never exists."""
+    players_raw = pd.DataFrame({"id": [1, 2], "price": [5.5, 6.0], "web_name": ["a", "b"]})
     prices, source = bmt.resolve_sell_prices([1, 2], players_raw, None)
     assert prices == {1: 5.5, 2: 6.0}
     assert source == "market"
