@@ -2192,3 +2192,30 @@ back for the Arsenal game") is richer and unread.
 M6 is **archived-only** — the Decide step still runs `m0_rules`. After 6
 gameweeks, evaluate against `M6_PREREGISTRATION.md`. Fold in or drop; log
 the outcome here.
+
+## 23. Dashboard revamp — FPL-page clone (C1) (2026-09-09)
+
+Spec: `docs/superpowers/specs/2026-09-09-c1-dashboard-fpl-clone-design.md`.
+Plan: `docs/superpowers/plans/2026-09-09-c1-dashboard-fpl-clone.md`.
+
+### Phase 1 — shared pitch component + static pitch view
+
+- **`dashboard/_pitch/`** (new) — `render_pitch(xi, bench, *, mode)` +
+  `pitch.css`. A minimal, self-contained formation renderer for **`app2`**
+  (Phase 2). Not used by the static dashboard — see below.
+- **`dashboard/template.html`** — the **My Team** tab now renders your 15
+  as a squad pitch (GK/DEF/MID/FWD rows) instead of a table, reusing the
+  template's *existing* `.pitch` / `.player-chip` markup and CSS (the same
+  This Week already used). Each chip: name / club·sell-price / weighted
+  xPts / a sell-vs-hold verdict from the best free-move analysis. The
+  roll/1/2/wildcard comparison table stays below.
+- **`scripts/build_dashboard_data.py`** — extracted `_stitch_html()` from
+  `main()` (with a test); no behaviour change.
+
+**Plan deviation, logged:** Task 1.2 assumed This Week was a table needing
+a pitch. It was already a pitch — a richer one than `_pitch`. So the
+static dashboard keeps its own pitch CSS; `_pitch`'s classes (`.pitch`,
+`.chip`) would collide if inlined. `_pitch` remains, for `app2` only. Net
+Phase 1: `_pitch` module + My Team pitch view. Confirmed in-browser
+(This Week unchanged, My Team 4 rows / 15 chips, no console errors).
+- Tests: `tests/test_pitch.py` (5), `test_dashboard_weekly` (+1). 257 passing.
