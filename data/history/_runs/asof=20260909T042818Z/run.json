@@ -1,0 +1,105 @@
+{
+  "run_id": "34e8ee2a-8edc-43e5-b23d-58f421386b4a",
+  "asof": "20260909T042818Z",
+  "asof_iso": "2026-09-09T04:28:18.450234+00:00",
+  "git_sha": "8b66dfa1a7f75d0c80e3c71c70236dbd7e53c726",
+  "git_dirty": true,
+  "config_sha256": "fdebc1de2bbeb772b7bebcfee6aa9a12ff34fd31c633090664f643c623e955cf",
+  "trigger": "local",
+  "target_gameweek": 4,
+  "deadline_utc": "2026-09-12T12:30:00Z",
+  "hours_to_deadline": 80.02820826833333,
+  "provenance": "recorded",
+  "archived": [
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "projections\\gw=1\\asof=20260909T042818Z\\model=m0_rules\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 2,
+      "model": "m0_rules",
+      "path": "projections\\gw=2\\asof=20260909T042818Z\\model=m0_rules\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 3,
+      "model": "m0_rules",
+      "path": "projections\\gw=3\\asof=20260909T042818Z\\model=m0_rules\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 4,
+      "model": "m0_rules",
+      "path": "projections\\gw=4\\asof=20260909T042818Z\\model=m0_rules\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "projections\\gw=1\\asof=20260909T042818Z\\model=m2_xg\\players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "projections\\gw=1\\asof=20260909T042818Z\\model=m3_understat\\players.parquet"
+    },
+    {
+      "domain": "decisions",
+      "gw": 1,
+      "model": null,
+      "path": "decisions\\gw=1\\asof=20260909T042818Z\\recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 2,
+      "model": null,
+      "path": "decisions\\gw=2\\asof=20260909T042818Z\\recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 3,
+      "model": null,
+      "path": "decisions\\gw=3\\asof=20260909T042818Z\\recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 4,
+      "model": null,
+      "path": "decisions\\gw=4\\asof=20260909T042818Z\\recommendation.json"
+    },
+    {
+      "domain": "health",
+      "gw": 4,
+      "model": "m0_rules",
+      "path": "health\\gw=4\\asof=20260909T042818Z\\model=m0_rules\\model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 4,
+      "model": "m2_xg",
+      "path": "health\\gw=4\\asof=20260909T042818Z\\model=m2_xg\\model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 4,
+      "model": "m3_understat",
+      "path": "health\\gw=4\\asof=20260909T042818Z\\model=m3_understat\\model_health.json"
+    },
+    {
+      "domain": "transfers",
+      "gw": 2,
+      "model": null,
+      "path": "transfers\\gw=2\\asof=20260909T042818Z\\transfers.json"
+    },
+    {
+      "domain": "transfers",
+      "gw": 3,
+      "model": null,
+      "path": "transfers\\gw=3\\asof=20260909T042818Z\\transfers.json"
+    }
+  ]
+}
