@@ -1,0 +1,15 @@
+/* dashboard/_pitch/pitch.css - shared formation-pitch styles (C1 / PROJECT_LOG §23).
+   Scoped under .pitch so it is safe to inline into any page. */
+.pitch{background:linear-gradient(#1b7a3b,#155f2e);border-radius:12px;padding:18px 12px;display:flex;flex-direction:column;gap:18px}
+.pitch-row{display:flex;justify-content:space-evenly;gap:6px;flex-wrap:wrap}
+.pitch-bench{display:flex;justify-content:center;gap:10px;border-top:2px dashed rgba(255,255,255,.25);padding-top:14px;margin-top:2px;flex-wrap:wrap}
+.chip{background:var(--panel,#171b21);border:1px solid var(--border,#2a3038);border-radius:8px;width:96px;padding:6px 4px;text-align:center;font-size:11px;color:var(--text,#e8ecf1)}
+.chip .kit{height:26px;border-radius:4px;background:#e8ecf1;margin:0 auto 4px;width:34px}
+.chip .cn{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .cl{color:var(--muted,#8b96a5);font-size:10px}
+.chip .cs{font-variant-numeric:tabular-nums;margin-top:3px}
+.chip .cv{font-size:10px;font-weight:700;margin-top:2px}
+.chip .cv.up{color:#34d399}.chip .cv.down{color:#f87171}.chip .cv.hold{color:var(--muted,#8b96a5)}
+.chip.is-cap{outline:2px solid #5eead4}
+.chip .startbar{height:3px;background:#2a3038;border-radius:2px;margin-top:4px;overflow:hidden}
+.chip .startbar > i{display:block;height:100%;background:#60a5fa}
