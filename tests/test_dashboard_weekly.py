@@ -114,3 +114,15 @@ def test_rebuild_index_handles_no_weeks_yet(tmp_path):
     index = arch.rebuild_index(tmp_path)
     assert index.exists()
     assert "No weekly snapshots yet" in index.read_text(encoding="utf-8")
+
+
+def test_stitch_html_always_substitutes_every_placeholder():
+    """A bare placeholder left in index.html emits `const X = ;` and takes
+    down the page — every one must substitute, "null" when absent."""
+    from scripts import build_dashboard_data as bdd
+
+    template = "const DATA=/*__DATA__*/; const HISTORY=/*__HISTORY__*/; const MY_TEAM=/*__MYTEAM__*/;"
+    out = bdd._stitch_html(template, data_json="{}", history_json="null", my_team_json="null")
+    assert "/*__" not in out
+    assert "const DATA={};" in out
+    assert "const MY_TEAM=null;" in out
