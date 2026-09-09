@@ -1,16 +1,24 @@
 # Handoff — FPL Points-Maximization Framework
 
-**Status as of 2026-09-09, latest (C1 Phase 1 — dashboard pitch view):**
+**Status as of 2026-09-09, latest (C1 Phase 2 — app2 FPL-clone shell):**
+`dashboard/app2/` is now tracked and restyled to the FPL page layout:
+six-item nav, `/` Points (last-GW actuals on a pitch), `/pick` Pick Team
+(current squad + model overlay — weighted xPts, chance-of-playing start
+bar, sell/hold verdict), `/fixtures`, `/transfers` (Phase 3 shell). New
+`points_view()` / `pick_team_view()` in `app2/data.py` (pure reshapes,
+FROZEN/LIVE split intact). Routes inline `dashboard/_pitch`'s `PITCH_CSS`
+and call `render_pitch()`. Run: `.venv\Scripts\python.exe -m dashboard.app2`,
+`http://localhost:5000/`. **262 tests.** Every route confirmed in-browser.
+Detail: `docs/PROJECT_LOG.md` §23. Branch `feat/c1-p2-app2-shell` (PR
+pending). Phases 3–4 (Transfers solver, retire `live_server.py`) to do.
+
+**Status as of 2026-09-09, earlier (C1 Phase 1 — dashboard pitch view):**
 New `dashboard/_pitch/` — `render_pitch(xi, bench, *, mode)` + `pitch.css`,
-a self-contained formation renderer for **`app2`** (built in Phase 2, not
-yet). The static dashboard's **My Team** tab now renders your 15 as a
-squad pitch (reusing the template's own existing `.pitch` markup — This
-Week was already a pitch, so `_pitch`'s CSS is app2-only to avoid a class
-collision). Verdict chip (sell?/hold) from the best free-move analysis.
-**257 tests.** Detail: `docs/PROJECT_LOG.md` §23. Branch
-`feat/c1-p1-static-pitch` (PR pending). Phases 2–4 (app2 shell, Transfers
-page, retire `live_server.py`) still to do — plan in
-`docs/superpowers/plans/2026-09-09-c1-dashboard-fpl-clone.md`.
+a self-contained formation renderer for **`app2`**. The static
+dashboard's **My Team** tab renders your 15 as a squad pitch (reusing the
+template's own existing `.pitch` markup — This Week was already a pitch,
+so `_pitch`'s CSS is app2-only to avoid a class collision). Detail:
+`docs/PROJECT_LOG.md` §23.
 
 **Status as of 2026-09-09, earlier (C2 — news → minutes, challenger M6):**
 FPL's free-text `news` field is now parsed by an LLM
