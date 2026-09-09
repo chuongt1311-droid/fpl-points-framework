@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPL — rough demo</title>
+<script src="{{ url_for('static', filename='htmx.min.js') }}"></script>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1e232b; --border:#2a3038;
+    --text:#e8ecf1; --muted:#8b96a5; --accent:#5eead4; --accent2:#60a5fa;
+    --good:#34d399; --warn:#fbbf24; --bad:#f87171; --pos:#34d399; --neg:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:0 32px 64px}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:32px 0 12px;font-weight:600}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+  .cards{display:flex;gap:14px;flex-wrap:wrap}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:130px}
+  .card .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .card .value{font-size:22px;font-weight:700;margin-top:4px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--border)}
+  td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px}
+  tr:last-child td{border-bottom:none}
+  tr.bench{opacity:.55}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover{background:var(--panel2)}
+  .name{font-weight:600}
+  .badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.03em}
+  .badge-a{background:rgba(52,211,153,.15);color:var(--good)}
+  .badge-d{background:rgba(251,191,36,.15);color:var(--warn)}
+  .badge-i,.badge-s,.badge-u{background:rgba(248,113,113,.15);color:var(--bad)}
+  .news{color:var(--muted);font-size:11px;display:block;margin-top:2px;max-width:260px}
+  .cap{color:var(--accent);font-weight:800}
+  .vc{color:var(--accent2);font-weight:800}
+  .xpts{font-variant-numeric:tabular-nums}
+  .conf-low{color:var(--bad)}
+  .conf-medium{color:var(--warn)}
+  .conf-high{color:var(--good)}
+  .breakdown{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin:4px 0 16px}
+  .breakdown h4{margin:0 0 6px;font-size:13px}
+  .meta{color:var(--muted);font-size:11px;margin-bottom:10px}
+  .chbar{width:100%;max-width:480px;height:auto;display:block}
+  .chlabel{fill:var(--muted);font-size:10.5px}
+  .chval{fill:var(--text);font-size:10.5px}
+  .chbar-pos{fill:var(--pos)}
+  .chbar-neg{fill:var(--neg)}
+  .chtotal{margin-top:8px;font-size:12px;color:var(--muted)}
+  .cell{border-radius:6px;padding:6px 4px;text-align:center;font-size:11px;font-weight:600;color:#0f1216}
+  .diff-1{background:#34d399}.diff-2{background:#a3e635}.diff-3{background:#fbbf24}
+  .diff-4{background:#fb923c}.diff-5{background:#f87171}.diff-none{background:var(--panel2);color:var(--muted)}
+  .footnote{color:var(--muted);font-size:11px;margin-top:28px}
+  .navbar{display:flex;gap:2px;padding:18px 0 20px;margin-bottom:4px;border-bottom:1px solid var(--border)}
+  .navbar a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px 8px 0 0}
+  .navbar a:hover{color:var(--text);background:var(--panel)}
+  .navbar a.active{color:var(--accent);background:var(--panel);border-bottom:2px solid var(--accent)}
+  .pos-badge{display:inline-block;background:var(--panel2);color:var(--muted);border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px}
+  .up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--muted)}
+  input.league-id{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px}
+  button.go{background:var(--accent);color:#0f1216;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer}
+  .empty{color:var(--muted);font-size:13px;padding:16px;text-align:center}
+</style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="{{ 'active' if active=='squad' }}">Squad</a>
+    <a href="/history" class="{{ 'active' if active=='history' }}">History</a>
+    <a href="/insights" class="{{ 'active' if active=='insights' }}">Insights</a>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

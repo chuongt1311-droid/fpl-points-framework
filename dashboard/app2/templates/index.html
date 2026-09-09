@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+  <style>
+    .radar{display:grid;grid-template-columns:70px repeat({{ radar.events|length }}, 1fr);gap:4px;max-width:560px}
+    .radar .hd{font-size:11px;color:var(--muted);text-align:center;padding:4px}
+    .radar .team{font-size:12px;font-weight:600;display:flex;align-items:center}
+  </style>
+  <h1>Your FPL squad</h1>
+  <div class="sub">
+    Entry {{ squad.entry_id }} · picks as of GW{{ squad.picks_event }} (live) · model output from
+    {{ squad.projections_asof or "no projections yet" }} (last pipeline run)
+  </div>
+
+  <div class="cards">
+    {% for h in squad.history %}
+    <div class="card"><div class="label">GW{{ h.event }}</div><div class="value">{{ h.points }} pts</div></div>
+    <div class="card"><div class="label">Overall rank</div><div class="value">{{ "{:,}".format(h.overall_rank) }}</div></div>
+    <div class="card"><div class="label">Bank</div><div class="value">£{{ "%.1f"|format(h.bank/10) }}m</div></div>
+    {% endfor %}
+  </div>
+
+  <h2>Squad</h2>
+  <table>
+    <thead><tr><th></th><th>Player</th><th>Pos</th><th>£</th><th>Weighted xPts</th><th>Next GW</th><th>Conf</th></tr></thead>
+    <tbody>
+      {% for r in squad.rows %}
+      <tr class="clickable {{ 'bench' if r.multiplier == 0 }}"
+          hx-get="/api/breakdown/{{ r.id }}" hx-target="#bd-{{ r.id }}" hx-swap="innerHTML">
+        <td>
+          {% if r.is_captain %}<span class="cap">C</span>{% elif r.is_vice %}<span class="vc">V</span>{% endif %}
+        </td>
+        <td>
+          <span class="name">{{ r.web_name }}</span> <span style="color:var(--muted)">{{ r.team }}</span>
+          <span class="badge badge-{{ r.status }}">{{ r.status }}</span>
+          {% if r.news %}<span class="news">{{ r.news }}</span>{% endif %}
+        </td>
+        <td>{{ r.position }}</td>
+        <td>{{ r.price }}</td>
+        <td class="xpts">{{ r.weighted_xpts if r.weighted_xpts is not none else "—" }}</td>
+        <td class="xpts">{{ r.next_gw_xpts if r.next_gw_xpts is not none else "—" }}</td>
+        <td class="conf-{{ r.confidence }}">{{ r.confidence or "—" }}</td>
+      </tr>
+      <tr><td colspan="7" style="padding:0;border:none"><div id="bd-{{ r.id }}"></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="footnote">Click a player row to see the model's channel-by-channel xPts breakdown for their next fixture.</div>
+
+  <h2>Fixture difficulty radar — your clubs, next {{ radar.events|length }} GWs</h2>
+  <div class="radar">
+    <div class="hd"></div>
+    {% for gw in radar.events %}<div class="hd">GW{{ gw }}</div>{% endfor %}
+    {% for row in radar.grid %}
+      <div class="team">{{ row.team }}</div>
+      {% for c in row.cells %}
+        <div class="cell {{ 'diff-' + c.difficulty|string if c.difficulty else 'diff-none' }}">{{ c.label }}</div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  <div class="footnote">FPL's 1–5 difficulty rating — the only fixture signal live right now; strength_* ratings are still unpublished pre-season (see the model note).</div>
+{% endblock %}

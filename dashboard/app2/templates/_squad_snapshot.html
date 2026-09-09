@@ -1,0 +1,20 @@
+<div class="breakdown">
+  <h4>GW{{ s.event }} squad {% if s.active_chip %}<span class="badge badge-d">{{ s.active_chip }}</span>{% endif %}</h4>
+  <div class="meta">Total: {{ s.entry_history.get('points', '—') }} pts · Rank: {{ "{:,}".format(s.entry_history.get('overall_rank', 0)) if s.entry_history.get('overall_rank') else "—" }}</div>
+  <table>
+    <thead><tr><th></th><th>Player</th><th>Pos</th><th>Pts</th></tr></thead>
+    <tbody>
+      {% for r in s.rows %}
+      <tr class="{{ 'bench' if r.multiplier == 0 }}">
+        <td>{% if r.is_captain %}<span class="cap">C</span>{% elif r.is_vice %}<span class="vc">V</span>{% endif %}</td>
+        <td><span class="name">{{ r.web_name }}</span> <span style="color:var(--muted)">{{ r.team }}</span></td>
+        <td>{{ r.position }}</td>
+        <td>
+          {{ r.points }}
+          {% if r.multiplier > 1 %}<span class="pos-badge">{{ r.raw_points }} raw × {{ r.multiplier }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
