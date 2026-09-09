@@ -1117,15 +1117,29 @@ function renderTicker(fixtures, dual){
   const g1 = v => (v>=0?'+':'') + v.toFixed(2);
   const statusFlag = s => (s && s!=='a') ? ` <span class="status-flag" title="${s}">●</span>` : '';
 
-  const rows = mt.squad.map(p=>`<tr>
-      <td>${p.position}</td>
-      <td>${p.web_name}${statusFlag(p.status)}</td>
-      <td class="mono">${p.team_short}</td>
-      <td class="mono">${fmtMoney(p.price)}</td>
-      <td class="mono">${p.sell_price==null?'—':fmtMoney(p.sell_price)}</td>
-      <td class="mono">${p.next_gw_xpts==null?'—':p.next_gw_xpts.toFixed(2)}</td>
-      <td class="mono">${p.weighted_xpts==null?'—':p.weighted_xpts.toFixed(1)}</td>
-    </tr>`).join('');
+  // Verdict per player: named as an OUT in any best free move → sell
+  // candidate; otherwise hold. (The model never wants a player you don't
+  // own, so there's no "buy" verdict on your own squad.)
+  const outNames = new Set(
+    [].concat(a.one.moves, a.two.moves).map(x=>x.out)
+  );
+  const verdictOf = p => outNames.has(p.web_name) ? 'down' : 'hold';
+  const verdictLabel = {down:'sell?', hold:'hold'};
+
+  // Your 15 as a squad pitch — same chip shape This Week uses, grouped by
+  // position (2 GK / 5 DEF / 5 MID / 3 FWD).
+  const squadPitch = ['GK','DEF','MID','FWD'].map(pos=>{
+    const chips = mt.squad.filter(p=>p.position===pos).map(p=>{
+      const v = verdictOf(p);
+      return `<div class="player-chip pos-top-${pos}">
+        <div class="name">${p.web_name}${statusFlag(p.status)}</div>
+        <div class="meta">${p.team_short} · ${p.sell_price==null?fmtMoney(p.price):fmtMoney(p.sell_price)}</div>
+        <div class="pts">${p.weighted_xpts==null?'—':p.weighted_xpts.toFixed(1)} wxPts</div>
+        <div class="meta" style="color:${v==='down'?'var(--warn,#e39a7a)':'var(--chalk-dim)'}">${verdictLabel[v]}</div>
+      </div>`;
+    }).join('');
+    return `<div class="pitch-row">${chips}</div>`;
+  }).join('');
 
   const opt = [
     ['Roll',        a.roll,     '0 transfers'],
@@ -1163,10 +1177,16 @@ function renderTicker(fixtures, dual){
       <div class="kpi"><div class="label">Best move gain</div><div class="value mono">${g1(bestGain)}</div><div class="sub">5-GW weighted xPts</div></div>
     </div>
 
-    <div class="card">
-      <h2>Your 15</h2>
-      <table><thead><tr><th>Pos</th><th>Player</th><th>Club</th><th>Price</th><th>Sell</th><th>GW${m.gameweek} xPts</th><th>5-GW wxPts</th></tr></thead>
-      <tbody>${rows}</tbody></table>
+    <div class="pitch-wrap">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="pitch">${squadPitch}</div>
+      </div>
+      <div class="card summary-lines">
+        <h2>Your 15</h2>
+        <div class="line"><div class="tag">Squad value</div><div class="txt">${fmtMoney(m.squad_sell_value||0)} sell · ${fmtMoney(m.bank||0)} bank · ${m.free_transfers} free transfer${m.free_transfers===1?'':'s'}</div></div>
+        <div class="line"><div class="tag">Sell candidates</div><div class="txt">${outNames.size?[...outNames].join(', '):'none — the model holds every player'}</div></div>
+        <div class="line"><div class="tag">Prices</div><div class="txt">${m.price_source==='my_team_file'?'your pasted sell prices':'market-price proxy — paste a fresh data/private/my_team.json for exact figures'}</div></div>
+      </div>
     </div>
 
     <div class="card">

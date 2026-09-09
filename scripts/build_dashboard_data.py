@@ -40,6 +40,16 @@ def r2(x):
     return round(float(x), 2) if pd.notna(x) else None
 
 
+def _stitch_html(template: str, *, data_json: str, history_json: str, my_team_json: str) -> str:
+    """Substitute every placeholder in template.html to produce the
+    self-contained index.html. Every placeholder ALWAYS substitutes — a
+    bare one left in place emits `const X = ;` and takes down the page."""
+    html = template.replace("/*__DATA__*/", data_json)
+    html = html.replace("/*__HISTORY__*/", history_json)
+    html = html.replace("/*__MYTEAM__*/", my_team_json)
+    return html
+
+
 def select_target_gameweek(output_dir: Path, gameweeks: list[int]) -> int:
     """The gameweek the dashboard should show: the upcoming one if the
     pipeline has already solved it, else the most recent one it has (the
@@ -304,27 +314,23 @@ def main():
     # ---- stitch the static, fully self-contained dashboard HTML ----
     template_path = DASHBOARD_DIR / "template.html"
     if template_path.exists():
-        html = template_path.read_text(encoding="utf-8")
-        html = html.replace("/*__DATA__*/", data_json)
-        # Phase G (spec §7.4): history.json is produced separately by
-        # scripts/build_history_data.py. Substituted here so index.html
-        # stays a single self-contained offline file. ALWAYS substitutes —
-        # the literal "null" when history.json is absent — because leaving
-        # the placeholder in place would emit `const HISTORY = ;`, a syntax
-        # error that takes down the whole page.
+        # Phase G (spec §7.4): history.json / my_team.json are produced by
+        # separate scripts. Substituted here so index.html stays one
+        # self-contained offline file. ALWAYS substitute — the literal
+        # "null" when absent — because a bare placeholder emits
+        # `const X = ;`, a syntax error that takes down the whole page.
         history_path = DASHBOARD_DIR / "history.json"
         history_json = (
             history_path.read_text(encoding="utf-8") if history_path.exists() else "null"
         )
-        html = html.replace("/*__HISTORY__*/", history_json)
-        # my_team.json — produced separately by scripts/build_my_team_data.py
-        # (needs a live entry pull + optional private my_team.json). Same
-        # always-substitute rule: "null" if absent, never a bare placeholder.
         my_team_path = DASHBOARD_DIR / "my_team.json"
         my_team_json = (
             my_team_path.read_text(encoding="utf-8") if my_team_path.exists() else "null"
         )
-        html = html.replace("/*__MYTEAM__*/", my_team_json)
+        html = _stitch_html(
+            template_path.read_text(encoding="utf-8"),
+            data_json=data_json, history_json=history_json, my_team_json=my_team_json,
+        )
         index_path = DASHBOARD_DIR / "index.html"
         index_path.write_text(html, encoding="utf-8")
         print(f"Wrote {index_path} ({index_path.stat().st_size / 1024:.0f} KB)")
