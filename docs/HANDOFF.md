@@ -1,5 +1,21 @@
 # Handoff — FPL Points-Maximization Framework
 
+**Status as of 2026-09-09, latest (rolling start-rate — our actuals over vaastav):**
+`compute_rolling_start_rate` read the current season only from vaastav's
+`merged_gw.csv`, which lags the FPL API ~1 GW — so §17's current-season
+fix was starved of data and Wissa still projected 0.99 xPts for GW4.
+Now: `data/actuals/` gains a `starts` column and is the preferred
+current-season source (weekly.yml collects it for every settled GW);
+past 3 current-season appearances the window is current-season-only.
+Wissa GW4 xPts 0.99 → 4.47; the model no longer wants him sold. **233
+tests passing.** Detail: `docs/PROJECT_LOG.md` §20. Branch
+`feat/actuals-into-rolling-start-rate` (PR pending) — GW4 artefacts
+regenerate on the next `weekly-run` after it merges.
+Also merged earlier today: **#8** (deadline-gated `next_n_gameweeks` +
+`live_server` `$PORT`), **#9** (GW4 pipeline run + a `resolve_sell_prices`
+market-path fix). Still uncommitted in the tree, deliberately: the
+`check_secrets.py` hardening bundle + its `.env.example` decoy token.
+
 **Status as of 2026-09-04, latest (dashboard "My Team" view):**
 The static dashboard showed the model's *optimal* squad, never the user's
 actual 15. New "My Team" tab: your real squad (from a cheap public entry

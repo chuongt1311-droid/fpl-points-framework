@@ -73,6 +73,25 @@ jobs:
       - name: Assert availability snapshot isn't stale
         run: python scripts/check_staleness.py
 
+      # PROJECT_LOG §20: graded per-player results for every settled gameweek,
+      # appended to data/actuals/. fpl/project/minutes.py reads the current
+      # season's `starts` from here in preference to vaastav's merged_gw.csv,
+      # which republishes ~1 GW behind the FPL API — so an in-season role
+      # change (Wissa: injury tail at the old club) stops being invisible for
+      # weeks. append_actuals is guarded on `event` already present, so
+      # re-running settled gameweeks is a no-op.
+      - name: Collect — actuals for every settled gameweek
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from fpl.collect import actuals
+          bs = json.loads(Path("data/raw/bootstrap_static.json").read_text(encoding="utf-8"))
+          for e in bs["events"]:
+              if e.get("finished") and e.get("data_checked"):
+                  actuals.collect_gameweek_actuals(e["id"])
+          PY
+
       - name: Transform — players + fixtures tables
         run: |
           python -m fpl.transform.build_players
@@ -130,7 +149,7 @@ jobs:
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots data/history dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
+          git add data/processed data/projections data/output data/snapshots data/history data/actuals dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else

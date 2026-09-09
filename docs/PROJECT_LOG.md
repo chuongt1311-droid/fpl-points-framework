@@ -2059,3 +2059,50 @@ roll 200.4 (5-GW weighted) · 1 free transfer +11.65 (next-GW **+1.31**) ·
 residual Wissa start-rate lag (§17) and horizon weighting on inert
 fixtures; next-GW it beats a free transfer by ~1.3. Verdict shown: hold
 the chip.
+
+## 20. Rolling start-rate: our own actuals over lagging vaastav (2026-09-09)
+
+### The symptom
+
+§17 folded the current season into `compute_rolling_start_rate`'s window,
+but Wissa still projected **0.99 xPts** for GW4 (vs Welbeck 5.29). Every
+transfer/wildcard scenario in the "My Team" view (§19) wanted him sold —
+the single largest "gain" on offer was bogus.
+
+### Root cause
+
+`compute_rolling_start_rate` read the current season only from
+`data/raw/history/<season>/gws/merged_gw.csv` — vaastav's archive, which
+**republishes ~1 gameweek behind the FPL API**. On 2026-09-09 it held
+only GW1 for 2026-27. Wissa's window was `[3 stale Brentford injury
+cameos (starts 0), 1 Newcastle start (1)]` = 1/4 → `minutes_factor` ≈ 0.25.
+The §17 fix was structurally correct but starved of data.
+
+### The fix
+
+- **`fpl/collect/actuals.py`** — `starts` added to `STAT_COLUMNS` (FPL
+  returns it per player per GW). `data/actuals/actuals_<season>.csv` is
+  now the fresh, self-owned source of current-season appearances.
+- **`fpl/project/minutes.py`** — `compute_rolling_start_rate` splits into
+  `_archived_season_appearances` (vaastav + identity bridge) and
+  `_current_season_appearances`, which prefers `data/actuals/` whenever it
+  covers ≥ as many gameweeks as vaastav (current-season `id` IS the FPL
+  `id`, no bridge). Second refinement: once a player has
+  `CURRENT_SEASON_ONLY_AFTER` (= 3) current-season appearances, the window
+  is drawn from the current season alone — a stale cross-club history tail
+  stops counting.
+- **`.github/workflows/weekly.yml`** — new "Collect — actuals for every
+  settled gameweek" step (loops finished + `data_checked` events →
+  `collect_gameweek_actuals`, a no-op on already-recorded GWs), before
+  Transform. `data/actuals` added to the commit step.
+- Tests: `tests/test_actuals.py` +1, `tests/test_minutes.py` +3 (two
+  existing current-season tests updated to monkeypatch `ACTUALS_DIR`).
+  233 passing.
+
+### Effect (real data, GW4)
+
+Wissa `rolling_start_rate` 0.167 → **1.000** (3 current-season starts, the
+threshold trims the Brentford tail), `minutes_factor` → 1.0, GW4 xPts
+**0.99 → 4.47**. Squad 5-GW weighted 234 → 250, next-GW XI 63.2 → 66.3.
+"My Team" 1-transfer gain collapses +12.74 → +4.55 — the model no longer
+wants Wissa sold. Wildcard verdict unchanged (hold).
