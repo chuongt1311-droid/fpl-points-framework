@@ -152,14 +152,18 @@ def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:
                    npxG for players with a real cross-source identity
                    match (fpl/project/understat_blend.py, plan §B3).
                    Nested per plan §B1: M3 = M2 + one new component.
-      Neither is wired into the default path — must be requested
-      explicitly, so M0's output is provably unaffected by either
-      existing.
+      "m6_news"  — M0's rates, but compute_minutes_factor uses an
+                   LLM-parsed start probability from FPL's `news` field
+                   in place of the chance_of_playing branch
+                   (fpl/project/news.py, C2 / PROJECT_LOG §22).
+      None of these is wired into the default path — each must be
+      requested explicitly, so M0's output is provably unaffected by any
+      of them existing.
     """
     players = build_players.build_players()
     base = baseline_mod.build_baseline(players, config)
     dc = defcon_mod.build_defcon(players, config)
-    mins = minutes_mod.compute_minutes_factor(players, config)
+    mins = minutes_mod.compute_minutes_factor(players, config, model=model)
 
     keep_base_cols = [
         "id", "code", "web_name", "position", "price", "team", "confidence", "confidence_weight",
@@ -185,8 +189,12 @@ def build_player_inputs(config: dict, model: str = "m0_rules") -> pd.DataFrame:
     elif model == "m3_understat":
         out = xg_blend_mod.apply_xg_blend(out, config)
         out = understat_blend_mod.apply_understat_blend(out, config)
+    elif model == "m6_news":
+        pass  # M0 rates + news-aware minutes_factor (already applied above)
     elif model != "m0_rules":
-        raise ValueError(f"Unknown model {model!r} — expected 'm0_rules', 'm2_xg' or 'm3_understat'")
+        raise ValueError(
+            f"Unknown model {model!r} — expected 'm0_rules', 'm2_xg', 'm3_understat' or 'm6_news'"
+        )
 
     return out
 

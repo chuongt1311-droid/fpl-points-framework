@@ -219,6 +219,97 @@ def test_rolling_start_rate_below_threshold_still_blends_history(tmp_path, monke
     assert out.loc[out["id"] == 7, "rolling_start_rate"].iloc[0] == pytest.approx(2 / 6)
 
 
+def test_minutes_m6_uses_news_prob_over_chance_of_playing(tmp_path, monkeypatch):
+    """model='m6_news': a parsed news signal supersedes chance_of_playing.
+    Player 1 has chance_of_playing=25 but the news parse says 0.8 → 0.8."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    from fpl.project import news as news_mod
+    monkeypatch.setattr(news_mod, "NEWS_CACHE_PATH", tmp_path / "news.json")
+    monkeypatch.setattr(news_mod.llm_client, "parse_availability", lambda t, c: {
+        "start_prob": 0.8, "status": "doubt", "return_gw": None,
+        "confidence": 0.9, "reason": "back in training",
+    })
+
+    players = _players([
+        {"id": 1, "status": "a", "chance_of_playing_next_round": 25, "news": "Knock - back in training"},
+        {"id": 2, "status": "a", "chance_of_playing_next_round": None, "news": ""},
+    ])
+    config = {"history": {"seasons": []}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02},
+              "news": {"model": "m", "prompt_version": 1, "min_confidence": 0.5}}
+
+    out = minutes_mod.compute_minutes_factor(players, config, model="m6_news")
+    assert out.loc[out["id"] == 1, "minutes_factor"].iloc[0] == pytest.approx(0.8)
+
+
+def test_minutes_m0_is_byte_identical_with_news_present(tmp_path, monkeypatch):
+    """model='m0_rules' (the default): news is NEVER consulted, even with a
+    populated cache. Same input → same output as before this change."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    from fpl.project import news as news_mod
+    monkeypatch.setattr(news_mod.llm_client, "parse_availability",
+                        lambda t, c: (_ for _ in ()).throw(AssertionError("m0 must not touch news")))
+
+    players = _players([
+        {"id": 1, "status": "a", "chance_of_playing_next_round": 25, "news": "Knock"},
+    ])
+    config = {"history": {"seasons": []}, "minutes": {"backup_gk_factor": 0.02}}
+
+    out = minutes_mod.compute_minutes_factor(players, config)  # default model
+    assert out.loc[out["id"] == 1, "minutes_factor"].iloc[0] == pytest.approx(0.25)
+
+
+def test_minutes_m6_news_never_overrides_hard_unavailable(tmp_path, monkeypatch):
+    """FPL status 'i' + a news parse of 0.9 → minutes_factor is still 0.0.
+    The parse only moves a player WITHIN the available-but-doubtful space."""
+    monkeypatch.setattr(minutes_mod, "HIST_DIR", tmp_path)
+    monkeypatch.setattr(minutes_mod, "ACTUALS_DIR", tmp_path / "actuals")
+    monkeypatch.setattr("fpl.project.identity.HIST_DIR", tmp_path)
+
+    from fpl.project import news as news_mod
+    monkeypatch.setattr(news_mod, "NEWS_CACHE_PATH", tmp_path / "news.json")
+    monkeypatch.setattr(news_mod.llm_client, "parse_availability", lambda t, c: {
+        "start_prob": 0.9, "status": "available", "return_gw": None,
+        "confidence": 0.9, "reason": "rumour says fit",
+    })
+
+    players = _players([{"id": 1, "status": "i", "news": "Contradictory rumour"}])
+    config = {"history": {"seasons": []}, "season": "2026-27",
+              "minutes": {"backup_gk_factor": 0.02},
+              "news": {"model": "m", "prompt_version": 1, "min_confidence": 0.5}}
+
+    out = minutes_mod.compute_minutes_factor(players, config, model="m6_news")
+    assert out.loc[out["id"] == 1, "minutes_factor"].iloc[0] == 0.0
+
+
+def test_build_player_inputs_m6_news_threads_model_to_minutes(monkeypatch):
+    """build_player_inputs(model='m6_news') must pass model through to
+    compute_minutes_factor — otherwise M6 == M0 and the whole feature is inert."""
+    from fpl.project import project as project_mod
+
+    seen = {}
+    real = project_mod.minutes_mod.compute_minutes_factor
+
+    def _spy(players, config, model="m0_rules"):
+        seen["model"] = model
+        return real(players, config, model=model)
+
+    monkeypatch.setattr(project_mod.minutes_mod, "compute_minutes_factor", _spy)
+
+    cfg = project_mod.load_config()
+    try:
+        project_mod.build_player_inputs(cfg, model="m6_news")
+    except Exception:
+        pass  # we only care that the model string reached minutes
+    assert seen.get("model") == "m6_news"
+
+
 def test_apply_gk_backup_override_re_promotes_backup_when_number_one_is_injured():
     """Real bug regression (finding #3): the price-designated #1 used to
     be picked from a STATIC price ranking with no re-check against
