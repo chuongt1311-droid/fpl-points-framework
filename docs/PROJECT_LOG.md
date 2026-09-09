@@ -2106,3 +2106,41 @@ threshold trims the Brentford tail), `minutes_factor` → 1.0, GW4 xPts
 **0.99 → 4.47**. Squad 5-GW weighted 234 → 250, next-GW XI 63.2 → 66.3.
 "My Team" 1-transfer gain collapses +12.74 → +4.55 — the model no longer
 wants Wissa sold. Wildcard verdict unchanged (hold).
+
+## 21. Per-GW hindsight regret on the weekly schedule (2026-09-09)
+
+### The gap
+
+`fpl.evaluate.hindsight` (per-GW captaincy / bench / squad regret) was
+only ever run by hand. The dashboard's accuracy view and any "is the
+model improving" read depended on someone remembering — exactly the
+staleness bias `weekly.yml`'s own header warns about.
+
+### What changed (bounded)
+
+- **`fpl/evaluate/hindsight.py`** — new `compute_settled_hindsight(bootstrap)`:
+  loops finished + `data_checked` events, grades each, and **skips**
+  (never raises) a gameweek with no committed `data/state/squad_gw{n}.json`
+  or unsettled actuals. `python -m fpl.evaluate.hindsight all` drives it.
+- **`.github/workflows/weekly.yml`** — "Evaluate — per-GW hindsight regret"
+  step after Archive; `data/state` added to the commit list so each run's
+  `squad_gw{target}.json` (written by the Decide step) is persisted and
+  later gameweeks become gradable as their actuals settle.
+- Tests: `tests/test_hindsight.py` +1. 234 passing.
+
+### Explicitly NOT scheduled
+
+`model_health.json` — that is `fpl.evaluate.backtest`, a retrospective
+train/test split against a completed season, not a per-GW metric. The
+Decide step's own comment and `docs/DECISION_RULE.md` both forbid
+scheduling it; M0 stays champion until the pre-registered GW12 rule.
+
+### Known limitation, surfaced not hidden
+
+`squad_gw{n}.json` for n ≥ 2 carries `bank` / `free_transfers` hardcoded
+as if it were a fresh initial squad (`optimiser.build_gw1_squad` writes
+`free_transfers=1` and `bank = budget − cost` unconditionally). Hindsight
+reads neither — it grades the `recommended` XI/captain against actuals —
+but committing the file is not a blessing of those two fields. The real
+fix is wiring `fpl.decide.transfers` into the pipeline (CLAUDE.md
+known-open), which owns the true per-GW bank/FT state.

@@ -242,11 +242,41 @@ def compute_hindsight(gw: int, config: Optional[dict] = None) -> dict:
     return result
 
 
-if __name__ == "__main__":
-    import sys
+def compute_settled_hindsight(bootstrap: dict, config: Optional[dict] = None) -> list[int]:
+    """Grade every finished + data_checked gameweek we have the inputs for.
 
-    gw = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    result = compute_hindsight(gw)
-    r = result["regret"]
-    print(f"GW{gw} regret: captaincy={r['captaincy']:+.1f} bench={r['bench']:+.1f} "
-          f"squad={r['squad']:+.1f} | total={r['total']:+.1f}")
+    Wired into weekly.yml. A gameweek with no committed squad state (GW2+
+    until transfers.py is wired — CLAUDE.md known-open) or whose actuals
+    aren't recorded is quietly skipped rather than failing the job.
+    Returns the gameweeks actually evaluated, in order.
+    """
+    config = config or load_config()
+    evaluated = []
+    for event in sorted(bootstrap.get("events", []), key=lambda e: e["id"]):
+        if not (event.get("finished") and event.get("data_checked")):
+            continue
+        gw = event["id"]
+        try:
+            compute_hindsight(gw, config)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"[hindsight] GW{gw} skipped — {exc}")
+            continue
+        evaluated.append(gw)
+    return evaluated
+
+
+if __name__ == "__main__":
+    import json as _json
+    import sys
+    from pathlib import Path as _Path
+
+    if len(sys.argv) > 1 and sys.argv[1] == "all":
+        raw = _Path(__file__).resolve().parents[2] / "data" / "raw" / "bootstrap_static.json"
+        done = compute_settled_hindsight(_json.loads(raw.read_text(encoding="utf-8")))
+        print(f"Hindsight computed for GW(s): {done or 'none ready'}")
+    else:
+        gw = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+        result = compute_hindsight(gw)
+        r = result["regret"]
+        print(f"GW{gw} regret: captaincy={r['captaincy']:+.1f} bench={r['bench']:+.1f} "
+              f"squad={r['squad']:+.1f} | total={r['total']:+.1f}")

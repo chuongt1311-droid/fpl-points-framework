@@ -117,6 +117,16 @@ jobs:
       - name: Archive this run (append-only, provenance-stamped)
         run: python -m fpl.history.archive
 
+      # PROJECT_LOG §21: per-GW regret (captaincy / bench / squad), graded
+      # against data/actuals/ for every settled gameweek that has a committed
+      # data/state/squad_gw{n}.json. compute_settled_hindsight skips (never
+      # fails the job) a GW with no squad state — GW2+ until transfers.py is
+      # wired (CLAUDE.md known-open) — or unsettled actuals. NOT model_health:
+      # that is fpl.evaluate.backtest, a retrospective one-off the pipeline
+      # deliberately never schedules (see the Decide step's note + DECISION_RULE).
+      - name: Evaluate — per-GW hindsight regret for settled gameweeks
+        run: python -m fpl.evaluate.hindsight all
+
       # Phase G: reads data/history/ via fpl.history.query only. Runs BEFORE
       # the dashboard build so this run's history.json is the one embedded
       # into index.html.
@@ -149,7 +159,7 @@ jobs:
         run: |
           git config user.name "fpl-pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/processed data/projections data/output data/snapshots data/history data/actuals dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
+          git add data/processed data/projections data/output data/snapshots data/history data/actuals data/state dashboard/data.json dashboard/history.json dashboard/index.html dashboard/weeks
           if git diff --cached --quiet; then
             echo "No artefact changes this run."
           else
