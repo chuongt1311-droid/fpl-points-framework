@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FPL — rough demo</title>
+<title>FPL — model overlay</title>
 <script src="{{ url_for('static', filename='htmx.min.js') }}"></script>
+<style>{{ pitch_css | safe }}</style>
 <style>
   :root{
     --bg:#0f1216; --panel:#171b21; --panel2:#1e232b; --border:#2a3038;
@@ -65,9 +66,12 @@
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="{{ 'active' if active=='squad' }}">Squad</a>
+    <a href="/" class="{{ 'active' if active=='points' }}">Points</a>
+    <a href="/pick" class="{{ 'active' if active=='pick' }}">Pick Team</a>
+    <a href="/transfers" class="{{ 'active' if active=='transfers' }}">Transfers</a>
+    <a href="/fixtures" class="{{ 'active' if active=='fixtures' }}">Fixtures</a>
+    <a href="/insights" class="{{ 'active' if active=='insights' }}">Leagues</a>
     <a href="/history" class="{{ 'active' if active=='history' }}">History</a>
-    <a href="/insights" class="{{ 'active' if active=='insights' }}">Insights</a>
   </nav>
   {% block content %}{% endblock %}
 </body>
