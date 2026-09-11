@@ -1,0 +1,33 @@
+{
+  "per_gw": [
+    {
+      "event": 1,
+      "brier_m0_full": 0.16521346083788704,
+      "brier_m6_full": 0.16521346083788704,
+      "brier_m0_newsonly": NaN,
+      "brier_m6_newsonly": NaN,
+      "n_news": 0
+    },
+    {
+      "event": 2,
+      "brier_m0_full": 0.13589682286119986,
+      "brier_m6_full": 0.13589682286119986,
+      "brier_m0_newsonly": NaN,
+      "brier_m6_newsonly": NaN,
+      "n_news": 0
+    },
+    {
+      "event": 3,
+      "brier_m0_full": 0.1299093272171254,
+      "brier_m6_full": 0.1299093272171254,
+      "brier_m0_newsonly": NaN,
+      "brier_m6_newsonly": NaN,
+      "n_news": 0
+    }
+  ],
+  "window": {
+    "brier_m0_newsonly": NaN,
+    "brier_m6_newsonly": NaN,
+    "n_news": 0
+  }
+}
