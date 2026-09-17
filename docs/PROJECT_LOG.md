@@ -2219,3 +2219,23 @@ static dashboard keeps its own pitch CSS; `_pitch`'s classes (`.pitch`,
 Phase 1: `_pitch` module + My Team pitch view. Confirmed in-browser
 (This Week unchanged, My Team 4 rows / 15 chips, no console errors).
 - Tests: `tests/test_pitch.py` (5), `test_dashboard_weekly` (+1). 257 passing.
+
+### Phase 2 — app2 read-only FPL-clone shell
+
+- `dashboard/app2/` is now tracked (was untracked). New `fpl-app2` launch
+  config (port 5000) — stays local, `.claude/` is gitignored.
+- **`dashboard/app2/data.py`** — `points_view()` (last-completed-GW
+  actuals, reshaped from `squad_snapshot`) and `pick_team_view()`
+  (current squad + model overlay: weighted xPts, chance-of-playing start
+  bar, sell/hold verdict from the committed `gw{n}_transfers.json`). Pure
+  reshapes; no pipeline call.
+- **`dashboard/app2/__init__.py`** — FPL-style routes: `/` Points,
+  `/pick` Pick Team, `/fixtures`, `/transfers` (Phase 3 shell). A context
+  processor inlines `dashboard/_pitch`'s `PITCH_CSS`; the Points/Pick
+  routes call `render_pitch(...)`. Old squad-demo `index.html` retired.
+- **`base.html`** — six-item nav (Points · Pick Team · Transfers ·
+  Fixtures · Leagues · History). `history.html` / `insights.html` pick it
+  up unchanged.
+- Tests: `tests/test_app2_data.py` (2), `test_app2_routes.py` (3). 262
+  passing. Every route confirmed in-browser (live FPL API), no console
+  errors.

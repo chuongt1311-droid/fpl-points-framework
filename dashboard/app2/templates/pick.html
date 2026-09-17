@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Pick Team — GW{{ v.event }}</h1>
+  <div class="sub">Your current squad with the model's numbers on each card. The model doesn't set your XI — it tells you what it projects.</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Formation</div><div class="value">{{ v.formation }}</div></div>
+    <div class="card"><div class="label">Captain</div><div class="value">{{ v.captain or "—" }}</div></div>
+    <div class="card"><div class="label">In the bank</div><div class="value">£{{ "%.1f"|format(v.bank) if v.bank is not none else "—" }}m</div></div>
+  </div>
+
+  <h2>On the pitch</h2>
+  {{ pitch | safe }}
+  <div class="footnote">
+    Each card: 5-GW weighted xPts, the start-probability bar (from FPL's
+    chance-of-playing), and a <b>sell?</b> tag when the committed transfer
+    solve wants that player out. Weighted xPts is what the optimiser ranks on.
+  </div>
+{% endblock %}

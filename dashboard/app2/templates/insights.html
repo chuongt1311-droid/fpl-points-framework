@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Insights</h1>
+  <div class="sub">GW{{ i.event }} · ownership, differentials, and captaincy — the "what most people don't see" layer.</div>
+
+  <h2>Your captain vs the field</h2>
+  <div class="cards">
+    <div class="card"><div class="label">You captained</div><div class="value">{{ i.my_captain or "—" }}</div></div>
+    <div class="card"><div class="label">Most-captained overall</div><div class="value">{{ i.most_captained or "—" }}</div></div>
+    <div class="card">
+      <div class="label">Verdict</div>
+      <div class="value {{ 'flat' if i.captain_is_template else 'up' }}">
+        {{ "Template" if i.captain_is_template else "Differential" }}
+      </div>
+    </div>
+  </div>
+
+  <h2>Differentials in your squad (low ownership, high upside)</h2>
+  {% if i.differentials %}
+  <table>
+    <thead><tr><th>Player</th><th>Pos</th><th>Team</th><th>Overall ownership</th></tr></thead>
+    <tbody>
+      {% for r in i.differentials %}
+      <tr><td class="name">{{ r.web_name }}</td><td>{{ r.position }}</td><td>{{ r.team }}</td><td>{{ r.selected_by_percent }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No low-ownership players in your squad right now.</div>
+  {% endif %}
+
+  <h2>Template picks in your squad (high ownership — won't move your rank)</h2>
+  <table>
+    <thead><tr><th>Player</th><th>Pos</th><th>Team</th><th>Overall ownership</th></tr></thead>
+    <tbody>
+      {% for r in i.template %}
+      <tr><td class="name">{{ r.web_name }}</td><td>{{ r.position }}</td><td>{{ r.team }}</td><td>{{ r.selected_by_percent }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="footnote">Overall ownership is the public selected_by_percent proxy — real effective ownership needs captain-weighting a specific mini-league (below).</div>
+
+  <h2>Mini-league effective ownership</h2>
+  <form hx-get="/insights" hx-target="body" hx-push-url="true" style="display:flex;gap:8px;margin-bottom:16px">
+    <input class="league-id" type="number" name="league_id" placeholder="Your league ID (from the league URL)">
+    <button class="go" type="submit">Pull real EO</button>
+  </form>
+  {% if i.league_error %}
+    <div class="empty">Couldn't load that league: {{ i.league_error }}</div>
+  {% elif i.league_eo %}
+    <div class="sub">{{ i.league_eo.league_name }} — {{ i.league_eo.n_rivals }} rivals' picks pulled</div>
+    <div class="cards" style="align-items:flex-start">
+      <div style="flex:1">
+        <h2 style="margin-top:0">Most owned in your league</h2>
+        <table>
+          <thead><tr><th>Player</th><th>% of league</th></tr></thead>
+          <tbody>
+            {% for p in i.league_eo.top_owned %}<tr><td>{{ p.web_name }}</td><td>{{ p.pct }}%</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="flex:1">
+        <h2 style="margin-top:0">Most captained in your league</h2>
+        <table>
+          <thead><tr><th>Player</th><th>% of league</th></tr></thead>
+          <tbody>
+            {% for p in i.league_eo.top_captained %}<tr><td>{{ p.web_name }}</td><td>{{ p.pct }}%</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="empty">Enter a mini-league ID above to see real captain-weighted ownership among your actual rivals.</div>
+  {% endif %}
+{% endblock %}

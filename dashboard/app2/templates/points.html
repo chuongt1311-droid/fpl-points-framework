@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Points — GW{{ v.event }}</h1>
+  <div class="sub">Your team's actual points last completed gameweek{% if v.active_chip %} · chip: {{ v.active_chip }}{% endif %}</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">GW{{ v.event }} points</div><div class="value">{{ v.total if v.total is not none else "—" }}</div></div>
+    <div class="card"><div class="label">Overall rank</div><div class="value">{{ "{:,}".format(v.rank) if v.rank else "—" }}</div></div>
+  </div>
+
+  <h2>On the pitch</h2>
+  {{ pitch | safe }}
+  <div class="footnote">Actual FPL points, captain doubled, autosubs already applied by FPL.</div>
+{% endblock %}

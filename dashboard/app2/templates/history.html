@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Season history</h1>
+  <div class="sub">Entry {{ h.entry_id }} — points, rank, transfers and chips, straight from FPL's own history (no local archive needed for this view).</div>
+
+  <h2>GW-by-GW points &amp; rank</h2>
+  {% if h.season_history %}
+  <table>
+    <thead><tr><th>GW</th><th>Points</th><th>Overall rank</th><th>Bank</th><th>Squad value</th><th>Hit</th></tr></thead>
+    <tbody>
+      {% for row in h.season_history %}
+      <tr class="clickable" hx-get="/history/gw/{{ row.event }}" hx-target="#snap" hx-swap="innerHTML">
+        <td>GW{{ row.event }}</td>
+        <td>{{ row.points }}</td>
+        <td>{{ "{:,}".format(row.overall_rank) if row.overall_rank else "—" }}</td>
+        <td>£{{ "%.1f"|format(row.bank/10) }}m</td>
+        <td>£{{ "%.1f"|format(row.value/10) }}m</td>
+        <td>{{ "-" ~ row.event_transfers_cost if row.event_transfers_cost else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="footnote">Click a gameweek to see the exact squad picked that week.</div>
+  {% else %}
+  <div class="empty">No completed gameweeks yet.</div>
+  {% endif %}
+
+  <div id="snap"></div>
+
+  <h2>Chip log</h2>
+  {% if h.chips %}
+  <table>
+    <thead><tr><th>Chip</th><th>Played GW</th></tr></thead>
+    <tbody>
+      {% for c in h.chips %}
+      <tr><td>{{ c.name }}</td><td>GW{{ c.event }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No chips played yet — all four (Wildcard, Bench Boost, Triple Captain, Free Hit) still available.</div>
+  {% endif %}
+
+  <h2>Transfer log</h2>
+  {% if h.transfers %}
+  <table>
+    <thead><tr><th>GW</th><th>Out</th><th>In</th><th>Pts since (out)</th><th>Pts since (in)</th><th>Regret</th></tr></thead>
+    <tbody>
+      {% for t in h.transfers %}
+      <tr>
+        <td>GW{{ t.event }}</td>
+        <td>{{ t.out_name }} (£{{ t.out_price }})</td>
+        <td>{{ t.in_name }} (£{{ t.in_price }})</td>
+        <td>{{ t.out_pts_since }}</td>
+        <td>{{ t.in_pts_since }}</td>
+        <td class="{{ 'up' if t.in_pts_since > t.out_pts_since else ('down' if t.in_pts_since < t.out_pts_since else 'flat') }}">
+          {{ "+" if t.in_pts_since >= t.out_pts_since else "" }}{{ t.in_pts_since - t.out_pts_since }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="footnote">"Regret" = actual points scored by the player brought in minus actual points scored by the player let go, from the transfer's gameweek onward. Not the model's point-in-time projection — that needs the history archive extended to capture per-transfer projections (design doc §3, not built yet).</div>
+  {% else %}
+  <div class="empty">No transfers made yet.</div>
+  {% endif %}
+{% endblock %}
