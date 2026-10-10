@@ -1,0 +1,183 @@
+{
+  "gameweek": 6,
+  "total_cost": 99.9,
+  "budget": 100.0,
+  "next_gw_expected_points": 64.01,
+  "horizon_weighted_xpts": 228.74,
+  "xi_correction_gain": 0.65,
+  "captain": {
+    "id": 428,
+    "web_name": "Cunha"
+  },
+  "vice_captain": {
+    "id": 12,
+    "web_name": "Saka"
+  },
+  "squad": [
+    {
+      "id": 4,
+      "web_name": "Gabriel",
+      "position": "DEF",
+      "team": 1,
+      "price": 8.0,
+      "weighted_xpts": 20.46,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 269,
+      "web_name": "Sessegnon",
+      "position": "DEF",
+      "team": 10,
+      "price": 4.3,
+      "weighted_xpts": 18.22,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 5,
+      "web_name": "J.Timber",
+      "position": "DEF",
+      "team": 1,
+      "price": 6.5,
+      "weighted_xpts": 17.74,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 411,
+      "web_name": "Haaland",
+      "position": "FWD",
+      "team": 15,
+      "price": 15.6,
+      "weighted_xpts": 23.59,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 165,
+      "web_name": "João Pedro",
+      "position": "FWD",
+      "team": 6,
+      "price": 7.7,
+      "weighted_xpts": 18.52,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 401,
+      "web_name": "Marmoush",
+      "position": "FWD",
+      "team": 19,
+      "price": 7.0,
+      "weighted_xpts": 17.7,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 250,
+      "web_name": "Leno",
+      "position": "GK",
+      "team": 10,
+      "price": 4.5,
+      "weighted_xpts": 13.68,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 12,
+      "web_name": "Saka",
+      "position": "MID",
+      "team": 1,
+      "price": 9.6,
+      "weighted_xpts": 21.59,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": true
+    },
+    {
+      "id": 428,
+      "web_name": "Cunha",
+      "position": "MID",
+      "team": 16,
+      "price": 7.9,
+      "weighted_xpts": 18.92,
+      "is_starting": true,
+      "is_captain": true,
+      "is_vice_captain": false
+    },
+    {
+      "id": 515,
+      "web_name": "Maddison",
+      "position": "MID",
+      "team": 19,
+      "price": 6.3,
+      "weighted_xpts": 17.14,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 453,
+      "web_name": "Barnes",
+      "position": "MID",
+      "team": 17,
+      "price": 6.1,
+      "weighted_xpts": 17.04,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 305,
+      "web_name": "Davis",
+      "position": "DEF",
+      "team": 12,
+      "price": 4.0,
+      "weighted_xpts": 6.69,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 304,
+      "web_name": "O'Shea",
+      "position": "DEF",
+      "team": 12,
+      "price": 4.0,
+      "weighted_xpts": 6.62,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 497,
+      "web_name": "Dubravka",
+      "position": "GK",
+      "team": 19,
+      "price": 4.0,
+      "weighted_xpts": 1.26,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 489,
+      "web_name": "Yates",
+      "position": "MID",
+      "team": 18,
+      "price": 4.4,
+      "weighted_xpts": 9.58,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    }
+  ]
+}
