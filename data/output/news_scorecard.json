@@ -2,40 +2,48 @@
   "per_gw": [
     {
       "event": 1,
-      "brier_m0_full": 0.21369120218579232,
-      "brier_m6_full": 0.21369120218579232,
+      "brier_m0_full": 0.22133828779599274,
+      "brier_m6_full": 0.22133828779599274,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 2,
-      "brier_m0_full": 0.18743308484203056,
-      "brier_m6_full": 0.18743308484203056,
+      "brier_m0_full": 0.19119595314164006,
+      "brier_m6_full": 0.19119595314164006,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 3,
-      "brier_m0_full": 0.18107400611620797,
-      "brier_m6_full": 0.18107400611620797,
+      "brier_m0_full": 0.18465665987088004,
+      "brier_m6_full": 0.18465665987088004,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 4,
-      "brier_m0_full": 0.17765159332321703,
-      "brier_m6_full": 0.17765159332321703,
+      "brier_m0_full": 0.1809288652841005,
+      "brier_m6_full": 0.1809288652841005,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 5,
-      "brier_m0_full": 0.18248355822088955,
-      "brier_m6_full": 0.18248355822088955,
+      "brier_m0_full": 0.1894696485090788,
+      "brier_m6_full": 0.1894696485090788,
+      "brier_m0_newsonly": NaN,
+      "brier_m6_newsonly": NaN,
+      "n_news": 0
+    },
+    {
+      "event": 6,
+      "brier_m0_full": 0.16678099283691486,
+      "brier_m6_full": 0.16678099283691486,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
