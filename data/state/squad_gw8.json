@@ -1,0 +1,43 @@
+{
+  "gameweek": 8,
+  "recommended": {
+    "squad": [
+      4,
+      10,
+      12,
+      154,
+      165,
+      492,
+      269,
+      305,
+      398,
+      411,
+      489,
+      497,
+      508,
+      515,
+      529
+    ],
+    "starting_xi": [
+      4,
+      10,
+      12,
+      154,
+      165,
+      492,
+      269,
+      398,
+      411,
+      515,
+      529
+    ],
+    "captain": 154,
+    "vice_captain": 411
+  },
+  "played": null,
+  "bank": 0.0,
+  "free_transfers": 1,
+  "transfers_made": [],
+  "chips_used": [],
+  "chip_active": null
+}
