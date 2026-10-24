@@ -1,0 +1,201 @@
+{
+  "run_id": "c801dc29-cf61-40d0-8541-f9c839b38023",
+  "asof": "20261024T183716Z",
+  "asof_iso": "2026-10-24T18:37:16.939268+00:00",
+  "git_sha": "69d3d923946d2d7e699401c029770cf2fac465ae",
+  "git_dirty": true,
+  "config_sha256": "03c3dd193c1691aa0edae8eab0ab166212c74fd09449fb05fb873a63830ff98e",
+  "trigger": "schedule",
+  "target_gameweek": 9,
+  "deadline_utc": "2026-10-31T11:00:00Z",
+  "hours_to_deadline": 160.37862798111112,
+  "provenance": "recorded",
+  "archived": [
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m0_rules",
+      "path": "projections/gw=1/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 2,
+      "model": "m0_rules",
+      "path": "projections/gw=2/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 3,
+      "model": "m0_rules",
+      "path": "projections/gw=3/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 4,
+      "model": "m0_rules",
+      "path": "projections/gw=4/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 5,
+      "model": "m0_rules",
+      "path": "projections/gw=5/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 6,
+      "model": "m0_rules",
+      "path": "projections/gw=6/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 7,
+      "model": "m0_rules",
+      "path": "projections/gw=7/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 8,
+      "model": "m0_rules",
+      "path": "projections/gw=8/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 9,
+      "model": "m0_rules",
+      "path": "projections/gw=9/asof=20261024T183716Z/model=m0_rules/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m2_xg",
+      "path": "projections/gw=1/asof=20261024T183716Z/model=m2_xg/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 1,
+      "model": "m3_understat",
+      "path": "projections/gw=1/asof=20261024T183716Z/model=m3_understat/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 4,
+      "model": "m6_news",
+      "path": "projections/gw=4/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 5,
+      "model": "m6_news",
+      "path": "projections/gw=5/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 6,
+      "model": "m6_news",
+      "path": "projections/gw=6/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 7,
+      "model": "m6_news",
+      "path": "projections/gw=7/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 8,
+      "model": "m6_news",
+      "path": "projections/gw=8/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "projections",
+      "gw": 9,
+      "model": "m6_news",
+      "path": "projections/gw=9/asof=20261024T183716Z/model=m6_news/players.parquet"
+    },
+    {
+      "domain": "decisions",
+      "gw": 1,
+      "model": null,
+      "path": "decisions/gw=1/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 2,
+      "model": null,
+      "path": "decisions/gw=2/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 3,
+      "model": null,
+      "path": "decisions/gw=3/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 4,
+      "model": null,
+      "path": "decisions/gw=4/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 5,
+      "model": null,
+      "path": "decisions/gw=5/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 6,
+      "model": null,
+      "path": "decisions/gw=6/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 7,
+      "model": null,
+      "path": "decisions/gw=7/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 8,
+      "model": null,
+      "path": "decisions/gw=8/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "decisions",
+      "gw": 9,
+      "model": null,
+      "path": "decisions/gw=9/asof=20261024T183716Z/recommendation.json"
+    },
+    {
+      "domain": "health",
+      "gw": 9,
+      "model": "m0_rules",
+      "path": "health/gw=9/asof=20261024T183716Z/model=m0_rules/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 9,
+      "model": "m2_xg",
+      "path": "health/gw=9/asof=20261024T183716Z/model=m2_xg/model_health.json"
+    },
+    {
+      "domain": "health",
+      "gw": 9,
+      "model": "m3_understat",
+      "path": "health/gw=9/asof=20261024T183716Z/model=m3_understat/model_health.json"
+    },
+    {
+      "domain": "transfers",
+      "gw": 2,
+      "model": null,
+      "path": "transfers/gw=2/asof=20261024T183716Z/transfers.json"
+    },
+    {
+      "domain": "transfers",
+      "gw": 3,
+      "model": null,
+      "path": "transfers/gw=3/asof=20261024T183716Z/transfers.json"
+    }
+  ]
+}

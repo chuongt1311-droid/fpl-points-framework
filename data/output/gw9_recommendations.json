@@ -2,9 +2,9 @@
   "gameweek": 9,
   "total_cost": 100.0,
   "budget": 100.0,
-  "next_gw_expected_points": 62.23,
-  "horizon_weighted_xpts": 235.96,
-  "xi_correction_gain": 0.45,
+  "next_gw_expected_points": 63.09,
+  "horizon_weighted_xpts": 240.38,
+  "xi_correction_gain": 0.0,
   "captain": {
     "id": 411,
     "web_name": "Haaland"
@@ -26,12 +26,12 @@
       "is_vice_captain": false
     },
     {
-      "id": 10,
-      "web_name": "White",
+      "id": 9,
+      "web_name": "Hincapie",
       "position": "DEF",
       "team": 1,
-      "price": 5.4,
-      "weighted_xpts": 16.6,
+      "price": 5.2,
+      "weighted_xpts": 17.31,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -81,12 +81,12 @@
       "is_vice_captain": false
     },
     {
-      "id": 496,
-      "web_name": "Kinsky",
+      "id": 57,
+      "web_name": "Petrović",
       "position": "GK",
-      "team": 19,
-      "price": 4.4,
-      "weighted_xpts": 12.19,
+      "team": 3,
+      "price": 4.5,
+      "weighted_xpts": 12.78,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -98,6 +98,17 @@
       "team": 6,
       "price": 9.8,
       "weighted_xpts": 20.07,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 515,
+      "web_name": "Maddison",
+      "position": "MID",
+      "team": 19,
+      "price": 6.2,
+      "weighted_xpts": 18.85,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -125,17 +136,6 @@
       "is_vice_captain": false
     },
     {
-      "id": 260,
-      "web_name": "Wilson",
-      "position": "MID",
-      "team": 13,
-      "price": 6.2,
-      "weighted_xpts": 17.02,
-      "is_starting": true,
-      "is_captain": false,
-      "is_vice_captain": false
-    },
-    {
       "id": 305,
       "web_name": "Davis",
       "position": "DEF",
@@ -147,12 +147,12 @@
       "is_vice_captain": false
     },
     {
-      "id": 259,
-      "web_name": "Diop",
+      "id": 304,
+      "web_name": "O'Shea",
       "position": "DEF",
       "team": 12,
-      "price": 3.9,
-      "weighted_xpts": 6.1,
+      "price": 4.0,
+      "weighted_xpts": 7.4,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
