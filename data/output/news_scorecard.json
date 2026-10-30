@@ -2,64 +2,64 @@
   "per_gw": [
     {
       "event": 1,
-      "brier_m0_full": 0.24642273224043718,
-      "brier_m6_full": 0.24642273224043718,
+      "brier_m0_full": 0.24538695810564662,
+      "brier_m6_full": 0.24538695810564662,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 2,
-      "brier_m0_full": 0.22455699325523606,
-      "brier_m6_full": 0.22455699325523606,
+      "brier_m0_full": 0.2211515264465744,
+      "brier_m6_full": 0.2211515264465744,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 3,
-      "brier_m0_full": 0.22250173292558617,
-      "brier_m6_full": 0.22250173292558617,
+      "brier_m0_full": 0.21694848793747878,
+      "brier_m6_full": 0.21694848793747878,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 4,
-      "brier_m0_full": 0.2307596020907098,
-      "brier_m6_full": 0.2307596020907098,
+      "brier_m0_full": 0.22727175855673581,
+      "brier_m6_full": 0.22727175855673581,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 5,
-      "brier_m0_full": 0.22762825254039648,
-      "brier_m6_full": 0.22762825254039648,
+      "brier_m0_full": 0.22518174246210226,
+      "brier_m6_full": 0.22518174246210226,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 6,
-      "brier_m0_full": 0.22677867732800264,
-      "brier_m6_full": 0.22677867732800264,
+      "brier_m0_full": 0.22178344161252705,
+      "brier_m6_full": 0.22178344161252705,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 7,
-      "brier_m0_full": 0.2021128409846973,
-      "brier_m6_full": 0.2021128409846973,
+      "brier_m0_full": 0.20865202927478377,
+      "brier_m6_full": 0.20865202927478377,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 8,
-      "brier_m0_full": 0.19050091346952333,
-      "brier_m6_full": 0.19050091346952333,
+      "brier_m0_full": 0.19747875768144826,
+      "brier_m6_full": 0.19747875768144826,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
