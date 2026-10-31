@@ -1,0 +1,183 @@
+{
+  "gameweek": 10,
+  "total_cost": 100.0,
+  "budget": 100.0,
+  "next_gw_expected_points": 70.31,
+  "horizon_weighted_xpts": 233.57,
+  "xi_correction_gain": 0.36,
+  "captain": {
+    "id": 78,
+    "web_name": "Kroupi.Jr"
+  },
+  "vice_captain": {
+    "id": 4,
+    "web_name": "Gabriel"
+  },
+  "squad": [
+    {
+      "id": 4,
+      "web_name": "Gabriel",
+      "position": "DEF",
+      "team": 1,
+      "price": 8.0,
+      "weighted_xpts": 21.02,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": true
+    },
+    {
+      "id": 5,
+      "web_name": "J.Timber",
+      "position": "DEF",
+      "team": 1,
+      "price": 6.5,
+      "weighted_xpts": 18.36,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 9,
+      "web_name": "Hincapie",
+      "position": "DEF",
+      "team": 1,
+      "price": 5.2,
+      "weighted_xpts": 18.04,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 411,
+      "web_name": "Haaland",
+      "position": "FWD",
+      "team": 15,
+      "price": 15.8,
+      "weighted_xpts": 23.38,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 401,
+      "web_name": "Marmoush",
+      "position": "FWD",
+      "team": 19,
+      "price": 7.0,
+      "weighted_xpts": 18.49,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 492,
+      "web_name": "Awoniyi",
+      "position": "FWD",
+      "team": 7,
+      "price": 5.4,
+      "weighted_xpts": 17.14,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 57,
+      "web_name": "Petrović",
+      "position": "GK",
+      "team": 3,
+      "price": 4.5,
+      "weighted_xpts": 13.35,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 78,
+      "web_name": "Kroupi.Jr",
+      "position": "MID",
+      "team": 3,
+      "price": 7.3,
+      "weighted_xpts": 21.87,
+      "is_starting": true,
+      "is_captain": true,
+      "is_vice_captain": false
+    },
+    {
+      "id": 154,
+      "web_name": "Palmer",
+      "position": "MID",
+      "team": 6,
+      "price": 9.8,
+      "weighted_xpts": 20.75,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 399,
+      "web_name": "Cherki",
+      "position": "MID",
+      "team": 15,
+      "price": 8.0,
+      "weighted_xpts": 19.72,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 515,
+      "web_name": "Maddison",
+      "position": "MID",
+      "team": 19,
+      "price": 6.2,
+      "weighted_xpts": 17.98,
+      "is_starting": true,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 305,
+      "web_name": "Davis",
+      "position": "DEF",
+      "team": 12,
+      "price": 4.0,
+      "weighted_xpts": 7.08,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 259,
+      "web_name": "Diop",
+      "position": "DEF",
+      "team": 12,
+      "price": 3.9,
+      "weighted_xpts": 5.7,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 497,
+      "web_name": "Dubravka",
+      "position": "GK",
+      "team": 19,
+      "price": 4.0,
+      "weighted_xpts": 1.28,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    },
+    {
+      "id": 489,
+      "web_name": "Yates",
+      "position": "MID",
+      "team": 18,
+      "price": 4.4,
+      "weighted_xpts": 9.44,
+      "is_starting": false,
+      "is_captain": false,
+      "is_vice_captain": false
+    }
+  ]
+}
