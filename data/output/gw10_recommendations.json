@@ -2,8 +2,8 @@
   "gameweek": 10,
   "total_cost": 100.0,
   "budget": 100.0,
-  "next_gw_expected_points": 75.43,
-  "horizon_weighted_xpts": 236.97,
+  "next_gw_expected_points": 75.4,
+  "horizon_weighted_xpts": 236.92,
   "xi_correction_gain": 0.0,
   "captain": {
     "id": 411,
@@ -31,7 +31,7 @@
       "position": "DEF",
       "team": 1,
       "price": 5.2,
-      "weighted_xpts": 17.67,
+      "weighted_xpts": 17.65,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -42,7 +42,7 @@
       "position": "DEF",
       "team": 1,
       "price": 5.4,
-      "weighted_xpts": 17.0,
+      "weighted_xpts": 16.98,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -75,7 +75,7 @@
       "position": "FWD",
       "team": 7,
       "price": 5.4,
-      "weighted_xpts": 17.41,
+      "weighted_xpts": 17.33,
       "is_starting": true,
       "is_captain": false,
       "is_vice_captain": false
@@ -141,7 +141,7 @@
       "position": "DEF",
       "team": 12,
       "price": 4.0,
-      "weighted_xpts": 7.05,
+      "weighted_xpts": 7.08,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
@@ -152,7 +152,7 @@
       "position": "DEF",
       "team": 12,
       "price": 4.0,
-      "weighted_xpts": 6.97,
+      "weighted_xpts": 7.0,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
