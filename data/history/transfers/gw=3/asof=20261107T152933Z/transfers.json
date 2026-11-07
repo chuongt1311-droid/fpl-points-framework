@@ -1,0 +1,73 @@
+{
+  "gameweek": 3,
+  "entry_id": 6669718,
+  "generated_utc": "2026-09-04T01:31:48.465646+00:00",
+  "recommendation": "transfer",
+  "caveats": [],
+  "free_transfers": 1,
+  "bank": 0.0,
+  "n_transfers": 1,
+  "hits": 0,
+  "hit_points": 0,
+  "transfers": [
+    {
+      "out": {
+        "id": 464,
+        "web_name": "Wissa",
+        "position": "FWD",
+        "price": 6.1,
+        "sell_price": 6.0
+      },
+      "in": {
+        "id": 136,
+        "web_name": "Welbeck",
+        "position": "FWD",
+        "price": 5.9
+      }
+    }
+  ],
+  "weighted_gain": 7.68,
+  "next_gw_gain": 1.31,
+  "baseline": {
+    "weighted": 213.97,
+    "next_gw": 62.29
+  },
+  "after": {
+    "weighted": 221.65,
+    "next_gw": 63.59
+  },
+  "squad": [
+    1,
+    136,
+    154,
+    165,
+    212,
+    335,
+    367,
+    387,
+    388,
+    411,
+    428,
+    497,
+    508,
+    533,
+    180
+  ],
+  "starting_xi": [
+    1,
+    136,
+    154,
+    165,
+    335,
+    367,
+    387,
+    388,
+    411,
+    428,
+    533
+  ],
+  "captain": 411,
+  "vice_captain": 387,
+  "sell_price_source": "my_team_file",
+  "my_team_file_age_hours": 0.04
+}
