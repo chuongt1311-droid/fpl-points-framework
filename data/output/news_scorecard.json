@@ -2,80 +2,80 @@
   "per_gw": [
     {
       "event": 1,
-      "brier_m0_full": 0.2504463570127505,
-      "brier_m6_full": 0.2504463570127505,
+      "brier_m0_full": 0.24917131147540986,
+      "brier_m6_full": 0.24917131147540986,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 2,
-      "brier_m0_full": 0.2195884451544196,
-      "brier_m6_full": 0.2195884451544196,
+      "brier_m0_full": 0.21914471068512598,
+      "brier_m6_full": 0.21914471068512598,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 3,
-      "brier_m0_full": 0.2259029731566429,
-      "brier_m6_full": 0.2259029731566429,
+      "brier_m0_full": 0.2247137104994903,
+      "brier_m6_full": 0.2247137104994903,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 4,
-      "brier_m0_full": 0.22917634462991066,
-      "brier_m6_full": 0.22917634462991066,
+      "brier_m0_full": 0.22875483055134044,
+      "brier_m6_full": 0.22875483055134044,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 5,
-      "brier_m0_full": 0.22451475928702316,
-      "brier_m6_full": 0.22451475928702316,
+      "brier_m0_full": 0.2248479260369815,
+      "brier_m6_full": 0.2248479260369815,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 6,
-      "brier_m0_full": 0.2230654839247043,
-      "brier_m6_full": 0.2230654839247043,
+      "brier_m0_full": 0.22314877561219387,
+      "brier_m6_full": 0.22314877561219387,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 7,
-      "brier_m0_full": 0.2156706753160346,
-      "brier_m6_full": 0.2156706753160346,
+      "brier_m0_full": 0.21600334331337326,
+      "brier_m6_full": 0.21600334331337326,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 8,
-      "brier_m0_full": 0.22311172562697226,
-      "brier_m6_full": 0.22311172562697226,
+      "brier_m0_full": 0.22269651220727454,
+      "brier_m6_full": 0.22269651220727454,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 9,
-      "brier_m0_full": 0.20510210613598673,
-      "brier_m6_full": 0.20510210613598673,
+      "brier_m0_full": 0.20468751243781091,
+      "brier_m6_full": 0.20468751243781091,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
     },
     {
       "event": 10,
-      "brier_m0_full": 0.199110333994709,
-      "brier_m6_full": 0.199110333994709,
+      "brier_m0_full": 0.19919300595238099,
+      "brier_m6_full": 0.19919300595238099,
       "brier_m0_newsonly": NaN,
       "brier_m6_newsonly": NaN,
       "n_news": 0
