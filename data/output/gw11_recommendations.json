@@ -3,7 +3,7 @@
   "total_cost": 100.0,
   "budget": 100.0,
   "next_gw_expected_points": 66.43,
-  "horizon_weighted_xpts": 246.88,
+  "horizon_weighted_xpts": 246.89,
   "xi_correction_gain": 0.0,
   "captain": {
     "id": 379,
@@ -174,7 +174,7 @@
       "position": "MID",
       "team": 18,
       "price": 4.4,
-      "weighted_xpts": 9.35,
+      "weighted_xpts": 9.36,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false
