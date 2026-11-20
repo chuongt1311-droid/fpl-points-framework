@@ -3,7 +3,7 @@
   "total_cost": 100.0,
   "budget": 100.0,
   "next_gw_expected_points": 66.43,
-  "horizon_weighted_xpts": 246.89,
+  "horizon_weighted_xpts": 242.71,
   "xi_correction_gain": 0.0,
   "captain": {
     "id": 379,
@@ -74,7 +74,7 @@
       "web_name": "N.Jackson",
       "position": "FWD",
       "team": 2,
-      "price": 7.1,
+      "price": 7.2,
       "weighted_xpts": 18.59,
       "is_starting": true,
       "is_captain": false,
@@ -136,12 +136,12 @@
       "is_vice_captain": false
     },
     {
-      "id": 269,
-      "web_name": "Sessegnon",
+      "id": 329,
+      "web_name": "Rodon",
       "position": "DEF",
-      "team": 10,
-      "price": 4.3,
-      "weighted_xpts": 14.96,
+      "team": 13,
+      "price": 4.2,
+      "weighted_xpts": 10.78,
       "is_starting": false,
       "is_captain": false,
       "is_vice_captain": false

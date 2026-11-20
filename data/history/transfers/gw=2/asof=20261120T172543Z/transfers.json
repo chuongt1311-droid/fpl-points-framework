@@ -1,0 +1,75 @@
+{
+  "gameweek": 2,
+  "entry_id": 6669718,
+  "generated_utc": "2026-08-22T14:54:33.184136+00:00",
+  "recommendation": "transfer",
+  "caveats": [
+    "Gain is only +0.18 weighted pts. This solve does not value an unused free transfer (H3c adds that), so it spends one for any positive gain. Rolling is likely at least as good here."
+  ],
+  "free_transfers": 1,
+  "bank": 0.0,
+  "n_transfers": 1,
+  "hits": 0,
+  "hit_points": 0,
+  "transfers": [
+    {
+      "out": {
+        "id": 388,
+        "web_name": "Guéhi",
+        "position": "DEF",
+        "price": 6.0,
+        "sell_price": 6.0
+      },
+      "in": {
+        "id": 389,
+        "web_name": "Matheus N.",
+        "position": "DEF",
+        "price": 6.0
+      }
+    }
+  ],
+  "weighted_gain": 0.18,
+  "next_gw_gain": 0.02,
+  "baseline": {
+    "weighted": 226.53,
+    "next_gw": 64.56
+  },
+  "after": {
+    "weighted": 226.71,
+    "next_gw": 64.58
+  },
+  "squad": [
+    1,
+    154,
+    165,
+    180,
+    212,
+    335,
+    367,
+    387,
+    389,
+    411,
+    428,
+    465,
+    497,
+    508,
+    533
+  ],
+  "starting_xi": [
+    1,
+    154,
+    165,
+    335,
+    367,
+    387,
+    389,
+    411,
+    428,
+    465,
+    533
+  ],
+  "captain": 411,
+  "vice_captain": 428,
+  "sell_price_source": "my_team_file",
+  "my_team_file_age_hours": 0.01
+}
